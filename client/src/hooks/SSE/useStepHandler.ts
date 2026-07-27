@@ -336,22 +336,22 @@ export default function useStepHandler({
   const calculateContentIndex = useCallback(
     (
       serverIndex: number,
-      initialContent: TMessageContentParts[],
+      prefixLength: number,
       incomingContentType: string,
       existingContent?: TMessageContentParts[],
     ): number => {
       /** Only apply -1 adjustment for TEXT or THINK types when they match existing content */
       if (
-        initialContent.length > 0 &&
+        prefixLength > 0 &&
         (incomingContentType === ContentTypes.TEXT || incomingContentType === ContentTypes.THINK)
       ) {
-        const targetIndex = serverIndex + initialContent.length - 1;
+        const targetIndex = serverIndex + prefixLength - 1;
         const existingType = existingContent?.[targetIndex]?.type;
         if (existingType === incomingContentType) {
           return targetIndex;
         }
       }
-      return serverIndex + initialContent.length;
+      return serverIndex + prefixLength;
     },
     [],
   );
@@ -701,6 +701,16 @@ export default function useStepHandler({
       if (submission?.editedContent != null) {
         initialContent = submission?.initialResponse?.content ?? initialContent;
       }
+      /**
+       * Offsets use the prefix length captured when the submission was built,
+       * NOT `initialContent.length`. After a resume the sync has replaced
+       * `initialResponse.content` with the server's completion-local snapshot,
+       * whose length is unrelated to the retained prefix — offsetting by it
+       * writes incoming parts over content the edit kept. `initialContent`
+       * itself is still the right base content below; only its length is
+       * unreliable.
+       */
+      const prefixLength = submission?.editPrefixLength ?? initialContent.length;
 
       if (stepEvent.event === StepEvents.ON_RUN_STEP) {
         const runStep = stepEvent.data;
@@ -717,7 +727,7 @@ export default function useStepHandler({
         stepMap.current.set(runStep.id, runStep);
 
         // Calculate content index - use server index, offset by initialContent for edit scenarios
-        const contentIndex = runStep.index + initialContent.length;
+        const contentIndex = runStep.index + prefixLength;
 
         let response = messageMap.current.get(responseMessageId);
 
@@ -857,7 +867,7 @@ export default function useStepHandler({
         const response = messageMap.current.get(responseMessageId);
         if (response) {
           // Agent updates don't need index adjustment
-          const currentIndex = agent_update.index + initialContent.length;
+          const currentIndex = agent_update.index + prefixLength;
           // Agent updates carry their own agentId - use default groupId if agentId is present
           const agentUpdateMeta: ContentMetadata | undefined = agent_update.agentId
             ? { agentId: agent_update.agentId, groupId: 1 }
@@ -904,7 +914,7 @@ export default function useStepHandler({
 
           const currentIndex = calculateContentIndex(
             runStep.index,
-            initialContent,
+            prefixLength,
             contentPart.type || '',
             response.content,
           );
@@ -946,7 +956,7 @@ export default function useStepHandler({
 
           const currentIndex = calculateContentIndex(
             runStep.index,
-            initialContent,
+            prefixLength,
             contentPart.type || '',
             response.content,
           );
@@ -1002,7 +1012,7 @@ export default function useStepHandler({
             }
 
             // Use server's index, offset by initialContent for edit scenarios
-            const currentIndex = runStep.index + initialContent.length;
+            const currentIndex = runStep.index + prefixLength;
             updatedResponse = updateContent(
               updatedResponse,
               currentIndex,
@@ -1051,7 +1061,7 @@ export default function useStepHandler({
           };
 
           // Use server's index, offset by initialContent for edit scenarios
-          const currentIndex = runStep.index + initialContent.length;
+          const currentIndex = runStep.index + prefixLength;
           updatedResponse = updateContent(
             updatedResponse,
             currentIndex,
@@ -1096,7 +1106,7 @@ export default function useStepHandler({
             summarizing: true,
           };
 
-          const contentIndex = runStep.index + initialContent.length;
+          const contentIndex = runStep.index + prefixLength;
           const updatedResponse = updateContent(
             response,
             contentIndex,
