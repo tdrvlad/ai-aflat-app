@@ -183,7 +183,7 @@
   "com_endpoint_plug_resend_files": "Retrimite fișierele",
   "com_endpoint_presence_penalty": "Penalizare de prezență",
   "com_endpoint_preset": "presetare",
-  "com_endpoint_preset_custom_name_placeholder": "aici trebuie completat ceva",
+  "com_endpoint_preset_custom_name_placeholder": "Introdu un nume personalizat",
   "com_endpoint_preset_default": "este acum presetarea implicită.",
   "com_endpoint_preset_default_item": "Implicit:",
   "com_endpoint_preset_default_none": "Nicio presetare implicită activă.",

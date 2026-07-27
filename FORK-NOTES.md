@@ -84,6 +84,7 @@ Rule: every deviation from upstream = one line here, same commit.
     merging cleanly. Wrapped in try/catch because a few specs (e.g.
     `src/components/Agents/tests/Accessibility.spec.tsx`) replace `react-i18next` with a bare
     stub and never touch the real i18n instance.
+- fix(ro): register pass (language-checker) — replaced stub placeholder value in com_endpoint_preset_custom_name_placeholder
 
 ## Local dev environment notes (not upstream deviations, but needed to boot)
 - Node/npm: repo pins Node `24.16.0` (`.nvmrc`) and `npm@11.13.0` (`packageManager` in
