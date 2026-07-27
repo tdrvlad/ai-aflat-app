@@ -10,6 +10,7 @@ import {
 import English from './en/translation.json';
 import Spanish from './es/translation.json';
 import French from './fr/translation.json';
+import Romanian from './ro/translation.json';
 import { TranslationKeys } from '~/hooks';
 import i18n from './i18n';
 
@@ -49,10 +50,18 @@ describe('i18next translation tests', () => {
     expect(i18n.t('com_ui_examples')).toBe(Spanish.com_ui_examples);
   });
 
-  it('should fallback to English for an invalid language code', async () => {
-    // When an invalid language is provided, i18next should fallback to English
+  it('should fallback to Romanian for an invalid language code', async () => {
+    // ai-aflat fork: an unresolvable locale falls back to 'ro' (the app default), not 'en'
     await changeLanguageSafely('invalid-code');
-    expect(i18n.t('com_ui_examples')).toBe(English.com_ui_examples);
+    expect(i18n.language).toBe('ro');
+    expect(i18n.t('com_ui_examples')).toBe(Romanian.com_ui_examples);
+  });
+
+  it('should still fallback to English for keys missing from the Romanian catalog', async () => {
+    // Keys we deliberately leave untranslated (disabled surfaces) resolve via fallbackLng: en
+    await changeLanguageSafely('ro');
+    expect(Romanian).not.toHaveProperty('com_agents_top_picks');
+    expect(i18n.t('com_agents_top_picks')).toBe(English.com_agents_top_picks);
   });
 
   it('should return the key itself for an invalid key', async () => {

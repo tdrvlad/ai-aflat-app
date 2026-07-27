@@ -54,6 +54,7 @@ export const LangSelector = ({
 
   const languageOptions = [
     { value: 'auto', label: localize('com_nav_lang_auto') },
+    { value: 'ro', label: localize('com_nav_lang_romanian') },
     { value: 'en-US', label: localize('com_nav_lang_english') },
     { value: 'zh-Hans', label: localize('com_nav_lang_chinese') },
     { value: 'zh-Hant', label: localize('com_nav_lang_traditional_chinese') },

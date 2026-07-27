@@ -42,6 +42,49 @@ Rule: every deviation from upstream = one line here, same commit.
     `packages/api/src/utils/env.spec.ts`) — confirmed working end-to-end via the
     `jobs.db` row captured in the Task 3 report.
 
+- **Romanian locale + `ro` as the app default (Task 4, committed):** the product's audience is
+  the Romanian general public, so the UI ships in Romanian by default with English kept as the
+  per-key fallback and as a selectable language.
+  - `client/src/locales/ro/translation.json` — new locale, 1791 of the EN catalog's 1928 keys.
+    Untranslated keys are **absent, not copied from EN**, so i18next's `fallbackLng: en`
+    resolves them. The 137 absent keys are all `com_agents_*` (94) and `com_assistants_*` (43) —
+    surfaces this deployment disables (`interface.agents: false` in `librechat.yaml`; the
+    assistants endpoints are not configured at all). Diacritics are comma-below ș/ț
+    (U+0219/U+021B) throughout; zero cedilla ş/ţ (U+015F/U+0163).
+  - `client/src/locales/en/translation.json` — one key added, `com_nav_lang_romanian: "Română"`
+    (upstream has no Romanian locale, so it has no label for one).
+  - `client/src/components/Nav/SettingsTabs/General/Selectors.tsx` — `ro` added to
+    `languageOptions`, placed above `en-US` since it's the default.
+  - `client/src/locales/i18n.ts` — four deviations:
+    - `ro` is bundled **eagerly** into `resources` (and pre-seeded in `loadedLocales` /
+      short-circuited in `ensureLocale`) instead of being lazy-loaded like every other locale,
+      because it's the default: lazy-loading it would flash English on first paint. `ro` still
+      has a `localeLoaders` entry so the lazy path stays consistent if it's ever selected
+      after another language.
+    - `lng: 'en'` → `lng: 'ro'` in `i18n.init`.
+    - `normalizeLocale()`'s two "nothing matched" fallbacks `'en'` → `'ro'`. This is the
+      function both the initial detection and `LanguageSync` run through, so it's what makes a
+      visitor whose stored/requested locale maps to nothing we ship land on Romanian.
+    - `detectInitialLanguage()` no longer falls through to `getNavigatorLanguage()`. Upstream
+      made the browser language the effective default (which left `lng` inert); we default a
+      visitor who has made no explicit choice — no `lang` cookie, nothing in localStorage — to
+      Romanian regardless of browser. An explicit choice is still honored, including the
+      selector's `auto`, which resolves to the browser language on demand.
+  - `client/src/store/language.ts` — same reason: upstream seeded the `lang` atom from
+    `navigator.language`, which would have had `LanguageSync` switch a first-time visitor back
+    to their browser language right after `detectInitialLanguage()` settled on Romanian. Both
+    paths must agree, so the no-explicit-choice default is `'ro'` here too.
+  - `client/src/locales/Translation.spec.ts` — the upstream case "should fallback to English
+    for an invalid language code" asserted the behaviour we deliberately changed; it now
+    asserts the fallback is Romanian. Added a companion case proving per-key `fallbackLng: en`
+    still resolves keys we leave out of the RO catalog.
+  - `client/test/setupTests.js` — pins the **test** language to `en` in a global `beforeAll`.
+    Upstream's component specs assert English UI strings and would all fail against a Romanian
+    default; pinning here keeps ~46 assertions across 17 upstream spec files unmodified and
+    merging cleanly. Wrapped in try/catch because a few specs (e.g.
+    `src/components/Agents/tests/Accessibility.spec.tsx`) replace `react-i18next` with a bare
+    stub and never touch the real i18n instance.
+
 ## Local dev environment notes (not upstream deviations, but needed to boot)
 - Node/npm: repo pins Node `24.16.0` (`.nvmrc`) and `npm@11.13.0` (`packageManager` in
   package.json); no `engines` field enforces this. Machine default via nvm was Node

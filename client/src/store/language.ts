@@ -20,12 +20,12 @@ const readStoredLang = () => {
   }
 };
 
-const defaultLang = () => {
-  const userLang =
-    (typeof navigator !== 'undefined' ? navigator.language || navigator.languages?.[0] : null) ??
-    'en';
-  return Cookies.get('lang') || readStoredLang() || userLang;
-};
+// ai-aflat fork: upstream seeds this atom from `navigator.language`, which would make
+// LanguageSync switch a first-time visitor back to their browser language right after
+// `detectInitialLanguage()` settled on Romanian. Both paths must agree, so the no-explicit-
+// choice default is 'ro' here too. Users can still pick any language (including 'auto',
+// which resolves to the browser language) from Settings; the choice persists in localStorage.
+const defaultLang = () => Cookies.get('lang') || readStoredLang() || 'ro';
 
 const lang = atomWithLocalStorage('lang', defaultLang());
 const languageLoading = atom<boolean>({

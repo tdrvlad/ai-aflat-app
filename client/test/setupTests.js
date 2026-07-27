@@ -74,3 +74,20 @@ jest.mock('react-i18next', () => {
     },
   };
 });
+
+// ai-aflat fork: the app ships Romanian as its default language (`lng: 'ro'` in
+// src/locales/i18n.ts), but upstream's component specs assert the English UI strings.
+// Pin the language back to 'en' for the test run so those specs keep passing unmodified
+// and keep merging cleanly from upstream. Romanian coverage — the catalog itself and the
+// default-language behaviour — lives in src/locales/Translation.spec.ts, which sets the
+// language explicitly in every test and is therefore unaffected by this pin.
+beforeAll(async () => {
+  try {
+    await require('~/locales/i18n').default.changeLanguage('en');
+  } catch {
+    // Specs that replace the whole `react-i18next` module with a bare stub (e.g.
+    // src/components/Agents/tests/Accessibility.spec.tsx) supply their own localize mock
+    // and never touch the real i18n instance — initializing it here would throw on their
+    // stub. There is nothing to pin in that case, so ignore it.
+  }
+});

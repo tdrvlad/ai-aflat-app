@@ -2,6 +2,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
 import translationEn from './en/translation.json';
+import translationRo from './ro/translation.json';
 
 export const defaultNS = 'translation';
 
@@ -36,6 +37,7 @@ export const supportedLocales = [
   'pl',
   'pt-BR',
   'pt-PT',
+  'ro',
   'ru',
   'sk',
   'sl',
@@ -54,6 +56,10 @@ export type TranslationResource = Record<string, string>;
 
 export const resources = {
   en: { translation: translationEn },
+  // `ro` is bundled eagerly (not lazy-loaded like the other locales below) because it's
+  // this app's default, primary-audience language — avoids a flash of English/missing-key
+  // text before the async locale loader resolves on first paint.
+  ro: { translation: translationRo },
 } as const;
 
 const localeLoaders: Record<
@@ -89,6 +95,7 @@ const localeLoaders: Record<
   pl: () => import('./pl/translation.json'),
   'pt-BR': () => import('./pt-BR/translation.json'),
   'pt-PT': () => import('./pt-PT/translation.json'),
+  ro: () => import('./ro/translation.json'),
   ru: () => import('./ru/translation.json'),
   sk: () => import('./sk/translation.json'),
   sl: () => import('./sl/translation.json'),
@@ -150,7 +157,7 @@ const localeAliases: Record<string, SupportedLocale> = {
   'zh-mo': 'zh-Hant',
 };
 
-const loadedLocales = new Set<SupportedLocale>(['en']);
+const loadedLocales = new Set<SupportedLocale>(['en', 'ro']);
 const loadingLocales: Partial<Record<SupportedLocale, Promise<SupportedLocale>>> = {};
 let languageRequestId = 0;
 let latestRequestedLocale: SupportedLocale = 'en';
@@ -194,10 +201,16 @@ function getNavigatorLanguage() {
   return navigator.language || navigator.languages?.[0] || 'en';
 }
 
+// Upstream falls back to 'en' when a requested/detected locale maps to nothing we ship.
+// ai-aflat is a Romanian-audience product, so the unresolvable case must land on 'ro'
+// instead: this is the function both the initial detection (`detectInitialLanguage`) and
+// the settings sync (`LanguageSync`) run through, so changing it here is what actually
+// makes a first-time visitor with an unmapped browser language see Romanian.
+// `en` stays the i18next `fallbackLng` for individual missing keys, and stays selectable.
 export function normalizeLocale(locale?: string | null): SupportedLocale {
   const requested = locale === 'auto' ? getNavigatorLanguage() : locale;
   if (!requested) {
-    return 'en';
+    return 'ro';
   }
 
   const normalized = requested.replace(/_/g, '-').toLowerCase();
@@ -212,19 +225,25 @@ export function normalizeLocale(locale?: string | null): SupportedLocale {
   }
 
   const base = normalized.split('-')[0];
-  return localeByLowercase[base] ?? localeAliases[base] ?? 'en';
+  return localeByLowercase[base] ?? localeAliases[base] ?? 'ro';
 }
 
 export function detectInitialLanguage() {
   const cookieLang = readCookie('lang');
   const storedLang = readStoredLanguage();
-  return normalizeLocale(cookieLang || storedLang || getNavigatorLanguage());
+  // ai-aflat fork: upstream falls through to `getNavigatorLanguage()` here, which makes the
+  // browser's language the effective default and leaves `lng: 'ro'` below inert. Our content
+  // is Romanian, so a visitor who has not picked a language explicitly (no cookie, nothing in
+  // localStorage) gets Romanian regardless of their browser. An explicit choice — including
+  // 'auto', which resolves to the browser language — is still honored, and the same default
+  // is seeded into the `lang` atom in `~/store/language.ts` so LanguageSync agrees with us.
+  return normalizeLocale(cookieLang || storedLang || 'ro');
 }
 
 export async function ensureLocale(locale?: string | null): Promise<SupportedLocale> {
   const normalized = normalizeLocale(locale);
 
-  if (normalized === 'en') {
+  if (normalized === 'en' || normalized === 'ro') {
     return normalized;
   }
 
@@ -286,7 +305,7 @@ export function syncDocumentLanguage(locale: SupportedLocale) {
 }
 
 export const i18nInitPromise = i18n.use(initReactI18next).init({
-  lng: 'en',
+  lng: 'ro',
   fallbackLng: {
     'zh-TW': ['zh-Hant', 'en'],
     'zh-HK': ['zh-Hant', 'en'],
