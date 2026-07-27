@@ -72,8 +72,10 @@ bower_components/
 .flooignore
 
 #config file
-librechat.yaml
+# ai-aflat: our librechat.yaml IS committed (product config, no secrets — only ${VAR}
+# refs resolved from the untracked .env). See FORK-NOTES.md.
 librechat.yml
+!librechat.yaml
 
 # Environment
 .npmrc

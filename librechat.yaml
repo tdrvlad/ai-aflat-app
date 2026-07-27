@@ -1,0 +1,42 @@
+# ai-aflat product config: single custom endpoint wired to the orchestrator
+# (Task 3, chatbot-phase1-colectorul). Keys verified against this v0.8.7 tree —
+# see FORK-NOTES.md "Deviations" for the differences from the task brief's draft.
+version: 1.3.13
+cache: true
+
+interface:
+  customWelcome: 'Întreabă despre legislația din România. Răspunsurile vin cu sursa lângă ele.'
+  privacyPolicy:
+    externalUrl: 'https://ai-aflat.ro/confidentialitate'
+    openNewTab: true
+  termsOfService:
+    externalUrl: 'https://ai-aflat.ro/termeni'
+    openNewTab: true
+  # hide non-product surfaces (exact keys confirmed against packages/data-provider/src/config.ts
+  # interfaceSchema; `endpointsMenu` from the brief's draft does not exist in this version —
+  # it was removed upstream as a dead field, see FORK-NOTES.md). modelSelect is left at its
+  # default (true) so users can switch between the two ai-aflat search modes.
+  presets: false
+  prompts: false
+  bookmarks: false
+  multiConvo: false
+  agents: false
+
+fileConfig:
+  endpoints:
+    custom:
+      disabled: true
+
+endpoints:
+  custom:
+    - name: 'ai-aflat'
+      apiKey: '${ORCHESTRATOR_API_KEY}'
+      baseURL: '${ORCHESTRATOR_BASE_URL}'
+      headers:
+        x-aflat-user-id: '{{LIBRECHAT_USER_ID}}'
+        x-aflat-conversation-id: '{{LIBRECHAT_BODY_CONVERSATIONID}}'
+      models:
+        default: ['cautare-simpla', 'cautare-aprofundata']
+        fetch: false
+      titleConvo: false
+      modelDisplayLabel: 'ai-aflat'

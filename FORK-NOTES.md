@@ -5,7 +5,42 @@ Upstream merge cadence: monthly + security releases (`git fetch upstream && git 
 Rule: every deviation from upstream = one line here, same commit.
 
 ## Deviations
-- (none yet — no LibreChat code or config changed in Task 1)
+- **`.gitignore` (Task 3, committed):** upstream ignores `librechat.yaml` by default
+  (assumes it holds secrets). Added `!librechat.yaml` after the `librechat.yml` ignore
+  line so our config — which holds only `${VAR}` references, no secrets — is trackable.
+- **`librechat.yaml` (Task 3, committed):** added, single custom endpoint `ai-aflat`
+  wired to the Task-2 orchestrator (`http://127.0.0.1:8085/v1`), models
+  `cautare-simpla` (default) / `cautare-aprofundata`. Non-product surfaces hidden via
+  `interface`: `presets`, `prompts`, `bookmarks`, `multiConvo`, `agents` all `false`;
+  `modelSelect` left at its default `true` so users can switch search modes.
+  `fileConfig.endpoints.custom.disabled: true` hides the composer's file-attach
+  control for the custom endpoint. `titleConvo: false` on the endpoint (not just a
+  global default) — titling would otherwise call the orchestrator and park a
+  spurious job. `.env` gained `ENDPOINTS=custom` (no built-in providers exposed),
+  `ORCHESTRATOR_API_KEY`, `ORCHESTRATOR_BASE_URL` (`.env` stays untracked;
+  `librechat.yaml` has no secrets, only `${VAR}` refs, so it IS committed).
+  - **Key-name differences from the task brief's draft yaml**, confirmed against
+    `packages/data-provider/src/config.ts` `interfaceSchema` and
+    `packages/data-provider/specs/config-schemas.spec.ts` in this v0.8.7 tree:
+    - `interface.endpointsMenu` does **not exist** — it was removed upstream
+      (`ea28dbfa8`, "chore: remove unused `interface.endpointsMenu` config field")
+      as dead code (it never controlled anything) and is now a legacy key the
+      schema silently strips. Omitted from our yaml entirely; the endpoint switcher
+      is hidden by having only one endpoint configured (`ENDPOINTS=custom`, one
+      `custom` entry), not by an interface flag.
+    - `version: 1.2.1` in the brief's draft → used `1.3.13` instead, the actual
+      `Constants.CONFIG_VERSION` for this tree (a version mismatch is non-fatal,
+      just an "Outdated Config version" log line, but there's no reason to ship
+      stale).
+    - All other keys in the brief's draft (`presets`, `prompts`, `bookmarks`,
+      `multiConvo`, `agents`, `fileConfig.endpoints.custom.disabled`, and the
+      `endpoints.custom[]` fields `name`/`apiKey`/`baseURL`/`headers`/`models`/
+      `titleConvo`/`modelDisplayLabel`) matched the schema as drafted — no changes.
+  - Header placeholders `{{LIBRECHAT_USER_ID}}` / `{{LIBRECHAT_BODY_CONVERSATIONID}}`
+    are real, resolved by `packages/api/src/utils/env.ts` for custom-endpoint
+    `headers:` (see `packages/api/src/endpoints/custom/initialize.spec.ts` and
+    `packages/api/src/utils/env.spec.ts`) — confirmed working end-to-end via the
+    `jobs.db` row captured in the Task 3 report.
 
 ## Local dev environment notes (not upstream deviations, but needed to boot)
 - Node/npm: repo pins Node `24.16.0` (`.nvmrc`) and `npm@11.13.0` (`packageManager` in
