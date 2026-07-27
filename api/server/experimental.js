@@ -14,7 +14,10 @@ const { logger, runAsSystem } = require('@librechat/data-schemas');
 const mongoSanitize = require('express-mongo-sanitize');
 const {
   isEnabled,
+  issueCsp,
   apiNotFound,
+  applyCspNonce,
+  createCspPolicy,
   ErrorController,
   QUERY_DEVTOOLS_HEADER,
   createSecurityHeaders,
@@ -339,6 +342,8 @@ if (cluster.isMaster) {
       }
     }
 
+    const cspPolicy = createCspPolicy();
+
     const sendIndexHtml = (req, res) => {
       res.set({
         'Cache-Control': process.env.INDEX_CACHE_CONTROL || 'no-cache, no-store, must-revalidate',
@@ -351,6 +356,13 @@ if (cluster.isMaster) {
       const saneLang = lang.replace(/"/g, '&quot;');
       let updatedIndexHtml = indexHTML.replace(/lang="en-US"/g, `lang="${saneLang}"`);
       updatedIndexHtml = maybeInjectQueryDevtoolsBootstrap(updatedIndexHtml, req);
+
+      /* Nonce last: every injected script above must be stamped too. */
+      if (cspPolicy) {
+        const csp = issueCsp(cspPolicy);
+        res.set(csp.headerName, csp.headerValue);
+        updatedIndexHtml = applyCspNonce(updatedIndexHtml, csp.nonce);
+      }
 
       res.type('html');
       res.send(updatedIndexHtml);
