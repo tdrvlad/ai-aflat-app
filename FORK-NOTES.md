@@ -84,7 +84,7 @@ Rule: every deviation from upstream = one line here, same commit.
     merging cleanly. Wrapped in try/catch because a few specs (e.g.
     `src/components/Agents/tests/Accessibility.spec.tsx`) replace `react-i18next` with a bare
     stub and never touch the real i18n instance.
-- fix(ro): register pass (language-checker) — replaced stub placeholder value in com_endpoint_preset_custom_name_placeholder
+- **`client/src/locales/ro/translation.json` (Task 4, committed):** language-checker register pass — replaced the stub placeholder value in `com_endpoint_preset_custom_name_placeholder` (upstream EN source is itself junk text).
 - **`client/src/locales/Translation.spec.ts` (Task 4 follow-up, committed):** added the describe
   block "Romanian as the app default (upstream-merge regression guards)" — the RO default lives in
   two files we re-merge from upstream (`detectInitialLanguage()` here, the `lang` atom seed in
