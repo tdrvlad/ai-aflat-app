@@ -3,6 +3,7 @@ import {
   __resetLocaleForTests,
   __setLocaleLoaderForTests,
   changeLanguageSafely,
+  detectInitialLanguage,
   ensureLocale,
   initializeI18n,
   normalizeLocale,
@@ -198,5 +199,71 @@ describe('i18next translation tests', () => {
     restoreSl();
     __resetLocaleForTests('sv');
     __resetLocaleForTests('sl');
+  });
+});
+
+/**
+ * ai-aflat fork: Romanian is the app's default language. Two independent code paths decide
+ * what a visitor sees on first load, and BOTH must default to 'ro' — `detectInitialLanguage()`
+ * in this module (consumed by `main.jsx` before first render) and the `lang` atom's seed in
+ * `~/store/language.ts` (consumed by `LanguageSync` on mount). Upstream falls through to
+ * `navigator.language` in both; if either one regresses, a visitor gets their browser's
+ * language instead of Romanian, and the other path is not enough to save it.
+ *
+ * These guards exist because this exact behaviour was already silently broken once (`lng: 'ro'`
+ * was set in `i18n.init` but never took effect, because detection overrode it before the first
+ * render), and because both files are re-merged from upstream on a monthly cadence — the
+ * precise vector that would quietly restore the `navigator.language` fallback.
+ *
+ * The lever that makes them bite: jsdom reports a non-Romanian `navigator.language`, so
+ * upstream's behaviour resolves to a locale that is NOT 'ro'. The first test asserts that
+ * precondition explicitly, so these guards fail loudly rather than silently passing for the
+ * wrong reason if the test environment's language ever changes.
+ */
+describe('Romanian as the app default (upstream-merge regression guards)', () => {
+  const clearExplicitLanguageChoice = () => {
+    localStorage.removeItem('lang');
+    document.cookie = 'lang=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+  };
+
+  afterEach(() => {
+    clearExplicitLanguageChoice();
+  });
+
+  it('precondition: the test environment reports a non-Romanian browser language', () => {
+    expect(normalizeLocale(navigator.language)).not.toBe('ro');
+  });
+
+  it('detectInitialLanguage() returns ro for a visitor with no explicit choice, ignoring the browser language', () => {
+    clearExplicitLanguageChoice();
+
+    // Restoring upstream's `|| getNavigatorLanguage()` fallback makes this return 'en' in jsdom.
+    expect(detectInitialLanguage()).toBe('ro');
+  });
+
+  it('detectInitialLanguage() still honours an explicit language choice over the ro default', () => {
+    localStorage.setItem('lang', JSON.stringify('en-US'));
+
+    // Guards the opposite regression: hardcoding 'ro' and ignoring what the user picked.
+    expect(detectInitialLanguage()).toBe('en');
+  });
+
+  it('the lang preference atom is seeded with ro for a visitor with no explicit choice, ignoring the browser language', () => {
+    clearExplicitLanguageChoice();
+
+    // The atom's default is computed at module load, so require it fresh with storage cleared.
+    // recoil is required inside the isolated registry too, so the atom and the snapshot that
+    // reads it come from the same instance.
+    let seededLanguage: unknown;
+    jest.isolateModules(() => {
+      /* eslint-disable @typescript-eslint/no-require-imports -- isolateModules needs require */
+      const { snapshot_UNSTABLE } = require('recoil');
+      const languageStore = require('~/store/language').default;
+      /* eslint-enable @typescript-eslint/no-require-imports */
+      seededLanguage = snapshot_UNSTABLE().getLoadable(languageStore.lang).getValue();
+    });
+
+    // Restoring upstream's navigator-derived `defaultLang()` makes this 'en-US' in jsdom.
+    expect(seededLanguage).toBe('ro');
   });
 });
