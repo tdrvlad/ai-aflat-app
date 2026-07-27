@@ -234,6 +234,14 @@ const startServer = async () => {
   /* Pre-auth tenant context for unauthenticated routes that need tenant scoping.
    * The reverse proxy / auth gateway sets `X-Tenant-Id` header for multi-tenant deployments. */
   app.use('/oauth', preAuthTenantMiddleware, routes.oauth);
+  /* ai-aflat: anonymous pre-signup surfaces. Mounted ahead of every other API
+   * route so no auth middleware can ever end up in front of them. Both are
+   * reachable without a JWT and are protected by per-IP rate limiters only;
+   * auth is applied inside the routers, per route (`anon-questions/:id/link`,
+   * and all of `consents`), never at the mount. */
+  app.use('/api/aflat/anon-questions', routes.anonQuestions);
+  app.use('/api/aflat/events', routes.aflatEvents);
+  app.use('/api/aflat/consents', routes.consents);
   /* API Endpoints */
   app.use('/api/auth', preAuthTenantMiddleware, routes.auth);
   app.use('/api/admin', routes.adminAuth);

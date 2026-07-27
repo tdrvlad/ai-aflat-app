@@ -92,6 +92,76 @@ Rule: every deviation from upstream = one line here, same commit.
   fallback would have gone unnoticed; jsdom's non-Romanian `navigator.language` is the lever that
   makes each guard fail (verified by reverting each change independently).
 
+- **Anonymous question API + consents + product events (Task 6, committed):** the pre-signup
+  "colectorul" funnel — a visitor parks a question, signs up, and claims it — plus the consent
+  ledger and the funnel telemetry it needs. Three new collections, three new routers, all mounted
+  under `/api/aflat/`. **Hard invariant across every file below: no request IP, user agent, or
+  other network identifier is ever persisted or logged.** The visitor's IP exists only as an
+  ephemeral rate-limiter key.
+  - `packages/data-schemas/src/schema/anonQuestion.ts`, `consentLog.ts`, `productEvent.ts` — new
+    schemas for collections `anon_questions`, `consent_logs`, `product_events`. These are the only
+    schemas in the tree that set mongoose's `collection` option explicitly; every upstream schema
+    relies on mongoose pluralizing the model name (`Banner` → `banners`), which would have given
+    us `anonquestions` / `consentlogs` / `productevents`. The snake_case names are the product
+    contract these collections are read under, so they are pinned in the schema.
+  - `packages/data-schemas/src/models/anonQuestion.ts`, `consentLog.ts`, `productEvent.ts` +
+    registration in `models/index.ts` and `schema/index.ts` (both follow the existing export/
+    create pattern exactly, appended under an `/* ai-aflat */` marker). None of the three applies
+    `applyTenantIsolation`, following the documented `auditLog` / `systemGrant` precedent: an anon
+    question and an anon product event are written on an *unauthenticated* request, so there is no
+    tenant context to stamp, and the later authenticated `:id/link` read (which does run inside
+    one) would never match a document the plugin had filtered. Consents are already scoped by
+    `userId` on every query. Each model file carries this rationale inline.
+  - `api/server/routes/anonQuestions.js` — `POST /api/aflat/anon-questions` (no auth, 5/hour/IP)
+    and `POST /api/aflat/anon-questions/:id/link` (`requireJwtAuth`). `ackVersion` is stored
+    verbatim as the client sends it and is deliberately never validated against a constant, so
+    changing the acknowledgement wording needs no code change and never invalidates old records.
+    `:id/link` returns 404 for an unknown id, a malformed id, *and* a question already claimed by
+    a different user (so ids can't be probed for existence); re-linking by the same user is
+    idempotent and emits no second event.
+  - `api/server/routes/consents.js` — `GET /me` + `POST /`, both behind `requireJwtAuth` applied
+    as `router.use` (a consent without a subject is meaningless). `gdprAccepted` and
+    `framingAccepted` must both be literally `true`; the legal-information framing acknowledgement
+    is not optional, so a truthy-but-not-true value is rejected as a client bug.
+  - `api/server/routes/aflatEvents.js` — `POST /api/aflat/events` (no auth, 30/hour/IP), accepting
+    exactly `gate_shown` and `gate_login_clicked`; anything else is 400. The rest of the funnel
+    (`question_submitted`, `gate_converted`, `consent_recorded`) is emitted server-side by the
+    route that performed the action, so it can't be forged from a browser. Client-supplied `meta`
+    is capped at 2 KB. This module also exports `recordProductEvent` alongside its router
+    (`module.exports.recordProductEvent = ...`, the same secondary-export shape
+    `api/server/middleware/requireJwtAuth.js` uses for `requireRumProxyAuth`) so the other two
+    routers emit through one best-effort, never-throws writer instead of three copies.
+  - `api/server/middleware/limiters/aflatLimiters.js` — new file, built exactly like
+    `registerLimiter` (same `express-rate-limit` options, `removePorts` key generator,
+    `limiterCache` store), with two deliberate differences: no `logViolation` call and no
+    `ViolationTypes` entry. Both limited routes are unauthenticated, so `logViolation` would
+    short-circuit on the missing `req.user` anyway; omitting it makes it structurally impossible
+    for a violation record to ever carry a visitor IP. Requires are direct
+    (`~/server/middleware/limiters/aflatLimiters`), following `banner.js`'s direct
+    `~/server/middleware/optionalJwtAuth` require, so upstream's `limiters/index.js` and
+    `middleware/index.js` stay untouched. Windows/limits are env-overridable
+    (`AFLAT_ANON_QUESTION_WINDOW/_MAX`, `AFLAT_EVENT_WINDOW/_MAX`) with the product defaults
+    5/hour and 30/hour baked in.
+  - `api/server/routes/index.js` — three requires + three exports, appended under an
+    `/* ai-aflat */` marker.
+  - `api/server/index.js` — the three `app.use('/api/aflat/…')` mounts, placed as the *first* API
+    routes, ahead of `/api/auth`. There is no app-level auth middleware in this tree (every router
+    guards itself), but putting the anonymous surfaces first makes it impossible for a future
+    global guard to be inserted in front of them by accident. Auth is applied inside the routers,
+    per route, never at the mount.
+  - The three routers read models straight from `~/db/models` rather than going through the
+    `createMethods` accessor layer in `packages/data-schemas/src/methods/` that upstream routes
+    use (`~/models` → `getBanner`, …). This keeps the fork's new surface inside `routes/` and
+    `schema/` instead of adding to another upstream barrel; add methods later if a second consumer
+    ever needs these collections.
+  - Tests: `api/server/routes/anonQuestions.test.js`, `consents.test.js`, `aflatEvents.test.js` —
+    46 cases over `mongodb-memory-server` + real models, following the `prompts.test.js` harness
+    (memory server in `beforeAll`, models from `~/db/models`, `requireJwtAuth` mocked). The test
+    apps set `trust proxy` so `X-Forwarded-For` drives `req.ip`: each test gets its own synthetic
+    source IP, which isolates limiter buckets without module resets and lets the 429 cases assert
+    the limit really is per-IP. Two cases assert the GDPR invariant directly by serializing the
+    written documents and checking the request IP does not appear.
+
 ## Local dev environment notes (not upstream deviations, but needed to boot)
 - Node/npm: repo pins Node `24.16.0` (`.nvmrc`) and `npm@11.13.0` (`packageManager` in
   package.json); no `engines` field enforces this. Machine default via nvm was Node

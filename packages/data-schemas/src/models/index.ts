@@ -34,6 +34,10 @@ import { createUserModel } from './user';
 import { createRoleModel } from './role';
 import { createFileModel } from './file';
 import { createKeyModel } from './key';
+/* ai-aflat */
+import { createAnonQuestionModel } from './anonQuestion';
+import { createConsentLogModel } from './consentLog';
+import { createProductEventModel } from './productEvent';
 
 /**
  * Creates all database models for all collections
@@ -75,6 +79,10 @@ export function createModels(mongoose: typeof import('mongoose')): {
   AuditLog: ReturnType<typeof createAuditLogModel>;
   Group: ReturnType<typeof createGroupModel>;
   Config: ReturnType<typeof createConfigModel>;
+  /* ai-aflat */
+  AnonQuestion: ReturnType<typeof createAnonQuestionModel>;
+  ConsentLog: ReturnType<typeof createConsentLogModel>;
+  ProductEvent: ReturnType<typeof createProductEventModel>;
 } {
   return {
     User: createUserModel(mongoose),
@@ -113,5 +121,9 @@ export function createModels(mongoose: typeof import('mongoose')): {
     AuditLog: createAuditLogModel(mongoose),
     Group: createGroupModel(mongoose),
     Config: createConfigModel(mongoose),
+    /* ai-aflat */
+    AnonQuestion: createAnonQuestionModel(mongoose),
+    ConsentLog: createConsentLogModel(mongoose),
+    ProductEvent: createProductEventModel(mongoose),
   };
 }

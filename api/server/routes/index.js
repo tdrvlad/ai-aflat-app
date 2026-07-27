@@ -36,6 +36,10 @@ const keys = require('./keys');
 const user = require('./user');
 const mcp = require('./mcp');
 const rum = require('./rum');
+/* ai-aflat */
+const anonQuestions = require('./anonQuestions');
+const aflatEvents = require('./aflatEvents');
+const consents = require('./consents');
 
 module.exports = {
   rum,
@@ -76,4 +80,8 @@ module.exports = {
   categories,
   staticRoute,
   accessPermissions,
+  /* ai-aflat */
+  anonQuestions,
+  aflatEvents,
+  consents,
 };

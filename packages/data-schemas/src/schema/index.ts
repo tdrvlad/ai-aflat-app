@@ -30,3 +30,7 @@ export { default as groupSchema } from './group';
 export { default as systemGrantSchema } from './systemGrant';
 export { default as auditLogSchema } from './auditLog';
 export { default as configSchema } from './config';
+/* ai-aflat */
+export { default as anonQuestionSchema } from './anonQuestion';
+export { default as consentLogSchema } from './consentLog';
+export { default as productEventSchema } from './productEvent';
