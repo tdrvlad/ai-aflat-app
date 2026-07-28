@@ -33,9 +33,20 @@ const consentsUrl = () => `${apiBaseUrl()}/api/aflat/consents`;
 
 /**
  * `staleTime: Infinity` on purpose: consent is a one-way transition within a
- * session and the POST writes the new state into the cache directly, so any
- * refetch could only re-assert what we already know — while a refetch that
- * failed mid-session would re-raise a modal in front of a user who just accepted.
+ * session and the POST writes the new state into the cache directly, so once we
+ * have an answer a refetch could only re-assert what we already know — and a
+ * refetch that failed mid-session would re-raise a modal in front of a user who
+ * just accepted.
+ *
+ * Everything else here exists so that *not having* an answer stays temporary.
+ * Both surfaces fail open — the modal only opens on an explicit `recorded:false`
+ * — so an unanswered GET hands the user the product with no consent on record,
+ * which is the state this gate exists to prevent. It must not be reachable by a
+ * single flaky request: hence real retries, and a refetch when the tab is
+ * focused or the network comes back. Those are safe precisely because of
+ * `staleTime: Infinity` — React Query treats a query that never resolved as
+ * stale (`dataUpdatedAt` is 0) and one that has as fresh forever, so these
+ * triggers can only ever fire while the answer is still missing.
  */
 export const useConsentStatus = (): UseQueryResult<ConsentStatus> =>
   useQuery<ConsentStatus>(
@@ -44,9 +55,11 @@ export const useConsentStatus = (): UseQueryResult<ConsentStatus> =>
     {
       staleTime: Infinity,
       cacheTime: Infinity,
-      retry: 1,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
+      retry: 3,
+      /* Faster than the library default: this gate stands in front of the app. */
+      retryDelay: (attempt) => Math.min(250 * 2 ** attempt, 5000),
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
     },
   );
 

@@ -1,6 +1,7 @@
 import {
   ACK_KEY,
   ACK_VERSION,
+  STASH_MAX_AGE_MS,
   clearStash,
   hasAcked,
   readStash,
@@ -23,12 +24,14 @@ describe('anonStash', () => {
   });
 
   it('round-trips a stashed question through the contract key', () => {
+    const before = Date.now();
     saveStash({ id: 'abc123', text: 'Câte zile de preaviz am?' });
 
-    expect(localStorage.getItem('aflat_anon_q')).toBe(
-      JSON.stringify({ id: 'abc123', text: 'Câte zile de preaviz am?' }),
-    );
-    expect(readStash()).toEqual({ id: 'abc123', text: 'Câte zile de preaviz am?' });
+    const stored = JSON.parse(localStorage.getItem('aflat_anon_q')!);
+    expect(stored).toMatchObject({ id: 'abc123', text: 'Câte zile de preaviz am?' });
+    expect(stored.ts).toBeGreaterThanOrEqual(before);
+    expect(stored.ts).toBeLessThanOrEqual(Date.now());
+    expect(readStash()).toEqual(stored);
   });
 
   it('returns null when nothing is stashed', () => {
@@ -38,6 +41,71 @@ describe('anonStash', () => {
   it('returns null instead of throwing on corrupt stash contents', () => {
     localStorage.setItem('aflat_anon_q', 'not json');
     expect(readStash()).toBeNull();
+  });
+
+  /**
+   * The stash outlives the visit that created it, and browsers are shared —
+   * a family PC, a library machine, a kiosk. Without an age limit, the next
+   * person to sign up here inherits a stranger's question: it is shown to them,
+   * asked as theirs, and `anon_questions.linkedUserId` is stamped with the wrong
+   * subject. These four cases are that boundary.
+   */
+  describe('expiry', () => {
+    const stashAged = (ageMs: number) =>
+      localStorage.setItem(
+        'aflat_anon_q',
+        JSON.stringify({ id: 'abc123', text: 'x', ts: Date.now() - ageMs }),
+      );
+
+    it('still returns a question parked just inside the window', () => {
+      stashAged(STASH_MAX_AGE_MS - 60_000);
+      expect(readStash()).toMatchObject({ id: 'abc123', text: 'x' });
+    });
+
+    it('drops a question parked longer ago than the maximum age', () => {
+      stashAged(STASH_MAX_AGE_MS + 60_000);
+
+      expect(readStash()).toBeNull();
+      expect(localStorage.getItem('aflat_anon_q')).toBeNull();
+    });
+
+    /** Written by the deployed build that predates `ts`: age unknown, so expired. */
+    it('drops a legacy stash that carries no timestamp', () => {
+      localStorage.setItem('aflat_anon_q', JSON.stringify({ id: 'abc123', text: 'x' }));
+
+      expect(readStash()).toBeNull();
+      expect(localStorage.getItem('aflat_anon_q')).toBeNull();
+    });
+
+    it('drops a stash whose timestamp is not a usable number', () => {
+      localStorage.setItem(
+        'aflat_anon_q',
+        JSON.stringify({ id: 'abc123', text: 'x', ts: 'yesterday' }),
+      );
+
+      expect(readStash()).toBeNull();
+      expect(localStorage.getItem('aflat_anon_q')).toBeNull();
+    });
+
+    /** A corrected clock must not make a stash immortal. */
+    it('drops a stash stamped far in the future', () => {
+      stashAged(-(STASH_MAX_AGE_MS + 60_000));
+
+      expect(readStash()).toBeNull();
+      expect(localStorage.getItem('aflat_anon_q')).toBeNull();
+    });
+
+    /**
+     * The post-login claim re-parks a question it could not deliver. Restarting
+     * the clock on every retry would let a stash live indefinitely, one failed
+     * claim at a time.
+     */
+    it('keeps a supplied timestamp instead of restarting the clock', () => {
+      const ts = Date.now() - STASH_MAX_AGE_MS / 2;
+      saveStash({ id: 'abc123', text: 'x', ts });
+
+      expect(readStash()).toEqual({ id: 'abc123', text: 'x', ts });
+    });
   });
 
   it('clears the stash', () => {

@@ -102,10 +102,14 @@ describe('AnonAsk (/ask)', () => {
     await waitFor(() =>
       expect(screen.getByTestId('aflat-user-bubble')).toHaveTextContent('Câte zile de preaviz am?'),
     );
-    expect(JSON.parse(localStorage.getItem('aflat_anon_q')!)).toEqual({
-      id: 'q-1',
-      text: 'Câte zile de preaviz am?',
-    });
+    /**
+     * Stamped, not just stored: the post-signup claim refuses a stash older than
+     * a day, so that a question abandoned on a shared browser is never asked as
+     * the next visitor's.
+     */
+    const parked = JSON.parse(localStorage.getItem('aflat_anon_q')!);
+    expect(parked).toMatchObject({ id: 'q-1', text: 'Câte zile de preaviz am?' });
+    expect(Date.now() - parked.ts).toBeLessThan(60_000);
     expect(screen.getByTestId('aflat-thinking')).toBeInTheDocument();
 
     await waitFor(() => expect(screen.getByTestId('aflat-login-gate')).toBeVisible(), {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { request } from 'librechat-data-provider';
 import ConsentModal from '../ConsentModal';
@@ -183,5 +183,45 @@ describe('ConsentModal', () => {
     await waitFor(() => expect(continueButton()).toBeDisabled());
     expect(mockedRequest.post).toHaveBeenCalledTimes(1);
     resolvePost({ recorded: true });
+  });
+
+  /**
+   * The gate fails open on purpose — the modal only appears on an explicit
+   * `recorded: false`, because walling a paying-attention user out of the
+   * product over a flaky GET is the worse failure. But "open" has to be
+   * temporary: while that GET has no answer, the user is using the product with
+   * no `consent_logs` row behind them. So the query has to be able to come back
+   * from a failure, on its own, without a reload.
+   */
+  describe('when the consent check itself fails', () => {
+    const consentQueryState = (queryClient: QueryClient) =>
+      queryClient.getQueryState(['aflat', 'consent-status'])?.status;
+
+    it('retries past repeated failures and still raises the gate', async () => {
+      mockedRequest.get
+        .mockRejectedValueOnce(new Error('network down'))
+        .mockRejectedValueOnce(new Error('network down'))
+        .mockResolvedValue({ recorded: false });
+
+      renderModal();
+
+      expect(await screen.findByTestId('aflat-consent-modal', {}, { timeout: 8000 })).toBeVisible();
+      expect(mockedRequest.get.mock.calls.length).toBeGreaterThanOrEqual(3);
+    }, 15000);
+
+    it('raises the gate on the next focus after the check has given up', async () => {
+      mockedRequest.get.mockRejectedValue(new Error('network down'));
+      const { queryClient } = renderModal();
+
+      await waitFor(() => expect(consentQueryState(queryClient)).toBe('error'), { timeout: 8000 });
+      expect(screen.queryByTestId('aflat-consent-modal')).not.toBeInTheDocument();
+
+      mockedRequest.get.mockResolvedValue({ recorded: false });
+      act(() => {
+        window.dispatchEvent(new Event('focus'));
+      });
+
+      expect(await screen.findByTestId('aflat-consent-modal', {}, { timeout: 8000 })).toBeVisible();
+    }, 15000);
   });
 });

@@ -319,6 +319,56 @@ Rule: every deviation from upstream = one line here, same commit.
   state straight into the cache rather than invalidating, so nothing sits between accepting and being
   let in. `wordingVersion` is pinned at `v1-2026-07` in `consent.ts` and travels on every record.
 
+- **`client/src/components/Aflat/usePostLoginHandoff.ts` (Task 8 review fixes, committed):** the
+  claim is a round trip and the chat underneath it can change while it is out, so every precondition
+  is now mirrored into a ref and re-asserted on the far side of the await — still mounted, still
+  ready, same conversation, no submission of the user's own in flight — and the parked question is
+  put back (same `ts`, both guards released) whenever any of those fails. Before this, the values
+  captured in the effect closure described the render that *started* the claim: a user who typed and
+  sent their own message during it lost the parked one silently, because `ask` no-ops while
+  `isSubmitting` and `submitMessage` reports that exactly like success. `submitMessage`'s `false`
+  (`ask` refusing to append to a preliminary assistant message) is now treated as undelivered too.
+  - **Deviation from the reviewer's prescription:** the "have we been torn down" flag is a
+    mount-lifetime ref, not a `let cancelled` closed over by the effect run. React strict mode — and
+    any `ready` flip — tears an effect down and runs it again on a component that never went away,
+    so a per-run flag cancels claims that are still perfectly deliverable (it breaks the strict-mode
+    case outright). Only a real unmount leaves the ref false, because nothing runs after it.
+  - `clearStash()` now happens *before* the claim goes out rather than after it returns. The stash
+    is `localStorage`, shared by every tab; `handledIds` is per page context; and the link route
+    matches `linkedUserId: null` **or** the caller's own id, so it answers 200-with-text to a
+    re-claim by the owner. Two tabs open after a signup therefore both claimed and both asked — two
+    conversations, two orchestrator jobs, one question. Clearing first narrows that to a single
+    synchronous storage write. Residual, accepted: a full page navigation *during* the claim loses
+    the stash (nothing runs to put it back). That is a narrower failure than a duplicate ask, and
+    the question is still parked server-side.
+  - `handledIds` is kept and is no longer redundant-looking: with the clear moved before the POST it
+    is specifically the guard for browsers where `removeItem` throws (site data blocked, Safari
+    private mode) — `clearStash` swallows that by contract, the stash survives the whole claim, and
+    a `ChatForm` remount mid-claim would otherwise read it and claim a second time. That is the case
+    the new regression test pins; the reviewer's mutation (`if (false)`) previously passed the whole
+    suite and now fails it.
+
+- **`client/src/components/Aflat/anonStash.ts` (Task 8 review fixes, committed):** the stash carries
+  a `ts` and expires after 24h (`STASH_MAX_AGE_MS`). Shared browsers are the reason: without it, a
+  visitor who asked and never signed up leaves their question behind, and the next person to sign up
+  on that machine has it shown to them, asked as theirs, and `anon_questions.linkedUserId` stamped
+  with the wrong subject — a disclosure, not just a bug. A stash written by the deployed Task 7 code
+  has no `ts` and no way to prove its age, so it is treated as expired and dropped rather than
+  claimed; a stamp far in the future (corrected clock, hand-edited value) goes the same way.
+  `saveStash` keeps its never-throws contract and accepts a caller-supplied `ts`, so the handoff
+  re-parking an undelivered question does not restart the expiry clock.
+
+- **`client/src/components/Aflat/consent.ts` (Task 8 review fixes, committed):** `retry: 1` +
+  `refetchOnWindowFocus/Reconnect: false` made one failed GET terminal for the whole session — `data`
+  stayed `undefined`, the modal never appeared, and the user got the product with no `consent_logs`
+  row, which is the exact state the gate exists to prevent. Both surfaces still fail *open* (walling
+  a user out on a flaky GET is the worse failure), but the query is now recoverable: `retry: 3` with
+  backoff (base 250ms — this gate stands in front of the app), and refetch on focus and reconnect.
+  Safe next to `staleTime: Infinity` because React Query treats a query that never resolved as stale
+  (`dataUpdatedAt` is 0) and one that has as fresh forever, so those triggers can only fire while the
+  answer is still missing; the POST writes `{recorded:true}` into the cache and a refetch after that
+  can only re-confirm it.
+
 ## Local dev environment notes (not upstream deviations, but needed to boot)
 - Node/npm: repo pins Node `24.16.0` (`.nvmrc`) and `npm@11.13.0` (`packageManager` in
   package.json); no `engines` field enforces this. Machine default via nvm was Node
