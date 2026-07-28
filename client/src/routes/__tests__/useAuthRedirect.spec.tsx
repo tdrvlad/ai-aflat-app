@@ -47,6 +47,11 @@ const createTestRouter = (basename = '/', initialEntry?: string) => {
         element: <div data-testid="login-page">Login Page</div>,
       },
       {
+        /** ai-aflat: unauthenticated visitors land on the public ask gate */
+        path: '/intreaba',
+        element: <div data-testid="anon-ask-page">Anon Ask Page</div>,
+      },
+      {
         path: '/c/:id',
         element: <TestComponent />,
       },
@@ -88,7 +93,7 @@ describe('useAuthRedirect', () => {
     expect(getByTestId('test-component')).toBeInTheDocument();
   });
 
-  it('should redirect to /login when user is not authenticated', async () => {
+  it('should redirect to /intreaba when user is not authenticated', async () => {
     (useAuthContext as jest.Mock).mockReturnValue({
       user: null,
       isAuthenticated: false,
@@ -103,8 +108,8 @@ describe('useAuthRedirect', () => {
     // Wait for the redirect to happen (300ms timeout + navigation)
     await waitFor(
       () => {
-        expect(router.state.location.pathname).toBe('/login');
-        expect(getByTestId('login-page')).toBeInTheDocument();
+        expect(router.state.location.pathname).toBe('/intreaba');
+        expect(getByTestId('anon-ask-page')).toBeInTheDocument();
         expect(queryByTestId('test-component')).not.toBeInTheDocument();
       },
       { timeout: 1000 },
@@ -132,13 +137,13 @@ describe('useAuthRedirect', () => {
     await waitFor(
       () => {
         // Router state pathname includes the full path with basename
-        expect(router.state.location.pathname).toBe('/librechat/login');
-        expect(getByTestId('login-page')).toBeInTheDocument();
+        expect(router.state.location.pathname).toBe('/librechat/intreaba');
+        expect(getByTestId('anon-ask-page')).toBeInTheDocument();
       },
       { timeout: 1000 },
     );
 
-    // The key point: navigate('/login', { replace: true }) works correctly with basename
+    // The key point: navigate('/intreaba', { replace: true }) works correctly with basename
     // The router automatically prepends the basename to create the full URL
     expect(router.state.historyAction).toBe('REPLACE');
   });
@@ -154,8 +159,8 @@ describe('useAuthRedirect', () => {
 
     await waitFor(
       () => {
-        expect(router.state.location.pathname).toBe('/librechat/login');
-        expect(getByTestId('login-page')).toBeInTheDocument();
+        expect(router.state.location.pathname).toBe('/librechat/intreaba');
+        expect(getByTestId('anon-ask-page')).toBeInTheDocument();
       },
       { timeout: 1000 },
     );
@@ -163,7 +168,7 @@ describe('useAuthRedirect', () => {
     // The fact that navigation worked within the router proves we're using
     // navigate() and not window.location.href (which would cause a full reload
     // and break the test entirely). This maintains the SPA experience.
-    expect(router.state.location.pathname).toBe('/librechat/login');
+    expect(router.state.location.pathname).toBe('/librechat/intreaba');
   });
 
   it('should clear timeout on unmount', async () => {
@@ -203,29 +208,15 @@ describe('useAuthRedirect', () => {
     });
   });
 
-  it('should include redirect_to param with encoded current path when redirecting', async () => {
-    (useAuthContext as jest.Mock).mockReturnValue({
-      user: null,
-      isAuthenticated: false,
-    });
-
-    const router = createTestRouter('/', '/c/abc123');
-    render(<RouterProvider router={router} />);
-
-    await waitFor(
-      () => {
-        expect(router.state.location.pathname).toBe('/login');
-        const search = router.state.location.search;
-        const params = new URLSearchParams(search);
-        const redirectTo = params.get('redirect_to');
-        expect(redirectTo).not.toBeNull();
-        expect(decodeURIComponent(redirectTo!)).toBe('/c/abc123');
-      },
-      { timeout: 1000 },
-    );
-  });
-
-  it('should encode query params and hash from the source URL', async () => {
+  /**
+   * ai-aflat deviation. Upstream sent unauthenticated visitors to
+   * `/login?redirect_to=<current location>` and had four cases asserting how
+   * that param was built. The gate replaces the target, and the deep link is
+   * deliberately dropped: an anonymous visitor has no session to resume, and
+   * everything past sign-in is owned by the gate's own hand-off. The two cases
+   * below replace those four and pin the drop so it can't come back silently.
+   */
+  it('should drop the source deep link rather than pass it as redirect_to', async () => {
     (useAuthContext as jest.Mock).mockReturnValue({
       user: null,
       isAuthenticated: false,
@@ -236,66 +227,27 @@ describe('useAuthRedirect', () => {
 
     await waitFor(
       () => {
-        expect(router.state.location.pathname).toBe('/login');
-        const params = new URLSearchParams(router.state.location.search);
-        const decoded = decodeURIComponent(params.get('redirect_to')!);
-        expect(decoded).toBe('/c/abc123?q=hello&submit=true#section');
+        expect(router.state.location.pathname).toBe('/intreaba');
       },
       { timeout: 1000 },
     );
+
+    expect(router.state.location.search).toBe('');
+    expect(router.state.location.hash).toBe('');
   });
 
-  it('should not include basename in redirect_to param (prevents path doubling)', async () => {
+  it('should drop the source deep link under a subdirectory deployment too', async () => {
     (useAuthContext as jest.Mock).mockReturnValue({
       user: null,
       isAuthenticated: false,
     });
 
-    /**
-     * Validates that React Router's useLocation() strips the basename before
-     * buildLoginRedirectUrl receives it, so redirect_to never contains
-     * the base prefix. The BASE_URL stripping logic inside buildLoginRedirectUrl
-     * (for callers using window.location.pathname) is tested in
-     * api-endpoints-subdir.spec.ts.
-     */
     const router = createTestRouter('/librechat', '/librechat/c/abc123');
     render(<RouterProvider router={router} />);
 
     await waitFor(
       () => {
-        expect(router.state.location.pathname).toBe('/librechat/login');
-        const search = router.state.location.search;
-        const params = new URLSearchParams(search);
-        const redirectTo = decodeURIComponent(params.get('redirect_to')!);
-        /** redirect_to should be /c/abc123, NOT /librechat/c/abc123
-         * because navigate() with basename will re-add the prefix */
-        expect(redirectTo).toBe('/c/abc123');
-        expect(redirectTo).not.toContain('/librechat/');
-      },
-      { timeout: 1000 },
-    );
-  });
-
-  it('should not append redirect_to when already on /login', async () => {
-    (useAuthContext as jest.Mock).mockReturnValue({
-      user: null,
-      isAuthenticated: false,
-    });
-
-    const router = createMemoryRouter(
-      [
-        {
-          path: '/login',
-          element: <TestComponent />,
-        },
-      ],
-      { initialEntries: ['/login'] },
-    );
-    render(<RouterProvider router={router} />);
-
-    await waitFor(
-      () => {
-        expect(router.state.location.pathname).toBe('/login');
+        expect(router.state.location.pathname).toBe('/librechat/intreaba');
       },
       { timeout: 1000 },
     );

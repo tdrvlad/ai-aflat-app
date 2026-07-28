@@ -1,12 +1,18 @@
 import { useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { buildLoginRedirectUrl } from 'librechat-data-provider';
+import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '~/hooks';
+
+/**
+ * ai-aflat: an unauthenticated visitor is sent to the public ask gate, not to
+ * `/login`. Signing in is the *outcome* of parking a question, not the price of
+ * admission, so the sign-in prompt lives inside the gate. The authenticated
+ * path is untouched.
+ */
+const ANON_GATE_PATH = '/intreaba';
 
 export default function useAuthRedirect() {
   const { user, roles, isAuthenticated } = useAuthContext();
   const navigate = useNavigate();
-  const location = useLocation();
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -14,7 +20,7 @@ export default function useAuthRedirect() {
         return;
       }
 
-      navigate(buildLoginRedirectUrl(location.pathname, location.search, location.hash), {
+      navigate(ANON_GATE_PATH, {
         replace: true,
       });
     }, 300);
@@ -22,7 +28,7 @@ export default function useAuthRedirect() {
     return () => {
       clearTimeout(timeout);
     };
-  }, [isAuthenticated, navigate, location]);
+  }, [isAuthenticated, navigate]);
 
   return {
     user,

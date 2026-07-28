@@ -579,3 +579,60 @@ describe('AuthContextProvider — custom role detection and fetching', () => {
     jest.useRealTimers();
   });
 });
+
+/**
+ * ai-aflat: an anonymous visitor is bounced to the public ask gate, not to
+ * `/login`. This provider is the *first* bounce to fire on a cold load (it
+ * beats `useAuthRedirect`'s 300ms timer), so if it kept pointing at `/login`
+ * the gate would be unreachable from `/`. The `/login` carve-out below is
+ * upstream's own recursion guard and must survive.
+ */
+describe('AuthContextProvider — anonymous visitors land on the ask gate', () => {
+  const runSilentRefresh = (result: 'no-token' | 'error') => {
+    renderProviderLive();
+    const [, refreshOptions] = mockRefreshMutate.mock.calls[0] as [
+      unknown,
+      { onSuccess: (data: unknown) => void; onError: (error: unknown) => void },
+    ];
+    act(() => {
+      if (result === 'no-token') {
+        refreshOptions.onSuccess({});
+      } else {
+        refreshOptions.onError(new Error('no session'));
+      }
+    });
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('sends a visitor with no token to /intreaba', () => {
+    window.history.replaceState({}, '', '/c/new');
+    runSilentRefresh('no-token');
+    expect(mockNavigate).toHaveBeenCalledWith('/intreaba');
+  });
+
+  it('sends a visitor whose refresh failed to /intreaba', () => {
+    window.history.replaceState({}, '', '/c/new');
+    runSilentRefresh('error');
+    expect(mockNavigate).toHaveBeenCalledWith('/intreaba');
+  });
+
+  it('leaves a visitor already on /login alone (no bounce off the sign-in page)', () => {
+    window.history.replaceState({}, '', '/login');
+    runSilentRefresh('no-token');
+    expect(mockNavigate).toHaveBeenCalledWith('/login');
+  });
+
+  it('leaves a visitor on /login/2fa alone', () => {
+    window.history.replaceState({}, '', '/login/2fa');
+    runSilentRefresh('no-token');
+    expect(mockNavigate).toHaveBeenCalledWith('/login');
+  });
+});

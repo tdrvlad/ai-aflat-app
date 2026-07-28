@@ -19,6 +19,7 @@ import LoginLayout from './Layouts/Login';
 import dashboardRoutes from './Dashboard';
 import ShareRoute from './ShareRoute';
 import ChatRoute from './ChatRoute';
+import AnonAsk from './AnonAsk';
 import Search from './Search';
 import Root from './Root';
 
@@ -59,6 +60,15 @@ export const router = createBrowserRouter(
     {
       path: 'share/:shareId',
       element: <ShareRoute />,
+      errorElement: <RouteErrorBoundary />,
+    },
+    {
+      /**
+       * ai-aflat: the public ask gate. Deliberately outside `AuthLayout` — it must
+       * render with no session, no auth context and no authenticated queries.
+       */
+      path: 'intreaba',
+      element: <AnonAsk />,
       errorElement: <RouteErrorBoundary />,
     },
     {

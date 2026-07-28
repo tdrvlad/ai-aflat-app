@@ -164,6 +164,81 @@ Rule: every deviation from upstream = one line here, same commit.
 
 - **`api/server/routes/anonQuestions.js` + `api/server/middleware/limiters/aflatLimiters.js` (Task 6 review fix, committed):** `POST /:id/link` was an unthrottled, enumerable read of other visitors' question text — the claim is authorised by possession of the `_id` alone and a hit returns `text`, and Mongo ObjectIds are guessable once an attacker holds two of their own (constant 5-byte per-process random, bracketed 3-byte counter), so every *unclaimed* question in that window was brute-forceable. Added `anonQuestionLinkLimiter` (10/hour/IP via the existing `buildAnonLimiter`, env-overridable through `AFLAT_ANON_QUESTION_LINK_WINDOW`/`_MAX`), mounted ahead of `requireJwtAuth` so failed-auth attempts count against the same budget and `req.user` stays unset at limiter time. The claim itself was also find-then-save, so two concurrent claimers could both see `linkedUserId == null` and both get 200 plus the text; it is now one conditional `findOneAndUpdate` (`$or: [{linkedUserId: null}, {linkedUserId: userId}]`) whose pre-image gates the `gate_converted` emit — a losing claimer matches nothing and gets the same 404 as an unknown id, while same-user re-link stays 200 and idempotent.
 
+- **Anonymous ask gate — `/intreaba` (Task 7, committed):** the client half of the pre-signup
+  funnel. A visitor with no session types a legal question, it is parked server-side, and the gate
+  asks for an account instead of showing an answer. **The gate never renders an answer and never
+  cites anything** — it is a capture surface, not an assistant surface.
+  - `client/src/routes/AnonAsk.tsx` — new public screen. Registered in `client/src/routes/index.tsx`
+    as a *top-level* route (sibling of `share/:shareId` and `verify`), deliberately **outside**
+    `AuthLayout`/`AuthContextProvider`: it must render with no session, no auth context and no
+    authenticated queries. It also reads no chat store — the whole screen is local `useState`.
+    State machine `idle → (send attempt without ack) needsAck → asking(1s) → gate`, plus an
+    `isSending` flag for the in-flight POST and an error slot. `Enter` sends, `Shift+Enter` newlines.
+  - `client/src/components/Aflat/anonStash.ts` — the localStorage contract Task 8 consumes:
+    `aflat_anon_q` = `{id, text}` via `saveStash`/`readStash`/`clearStash`, and `ACK_KEY` =
+    `aflat_ack_v1-2026-07` = ISO timestamp. The acknowledgement **version is in the key name**, so
+    changing the ack wording (bump `ACK_VERSION`) re-asks every visitor without a migration, and
+    the same constant is what the client sends as `ackVersion` — the server stores it verbatim.
+    `readStash` and the ack helpers swallow storage failures (private mode) rather than block a send.
+  - `client/src/components/Aflat/AckBar.tsx` — appears **only on a send attempt without a stored
+    ack**, and the acknowledgement then releases the send the visitor already asked for (one tap,
+    not two). If the ack is already stored it never renders.
+  - `client/src/components/Aflat/StarterChips.tsx` — three example questions that **fill the
+    composer without sending**: the send is what parks the question, so it stays an explicit act.
+    Hidden once a question is in flight.
+  - `client/src/components/Aflat/LoginGatePanel.tsx` — emits `gate_shown` on mount and
+    `gate_login_clicked` on `Continuă`, both through one fire-and-forget `postAflatEvent` that
+    never throws and never surfaces a failure. Uses `keepalive: true` so the click event survives
+    the navigation that immediately follows it (verified: the event lands in `product_events`).
+    Navigates via `loginPage()` from the data-provider rather than a literal `/login`, so a
+    subdirectory deployment keeps working.
+  - Styling is **entirely** the fork's existing tokens and Tailwind theme classes — no hex, no new
+    palette. The composer shell/textarea/send-button classes are cloned verbatim from
+    `client/src/components/Chat/Input/ChatForm.tsx` + `SendButton.tsx`, the chips from
+    `Chat/Input/ConversationStarters.tsx`, and the thinking dots reuse the existing
+    `.submitting .result-thinking` CSS. A later brand remap of the tokens restyles this screen for
+    free.
+  - i18n: 18 new `com_aflat_*` keys in **both** `client/src/locales/ro/translation.json` and
+    `client/src/locales/en/translation.json` (RO is the source copy, EN is the fallback catalog and
+    also what `TranslationKeys` is typed from, so a key missing there is a type error). No literal
+    UI strings in the JSX. RO diacritics are comma-below ș/ț throughout.
+  - Throttle handling: the 429 from `POST /api/aflat/anon-questions` (5/hour/IP, Task 6) renders as
+    a plain RO line via `com_aflat_error_rate_limited` with the question left in the composer — no
+    crash, no silent failure, no gate. A network failure gets `com_aflat_error_generic` the same way.
+  - Tests: `client/src/components/Aflat/__tests__/anonStash.spec.ts` (7 cases — contract keys,
+    corrupt-JSON tolerance, ack versioning) and `client/src/routes/__tests__/AnonAsk.spec.tsx`
+    (7 cases — chips don't send, first send is blocked and POSTs nothing, post-ack send carries
+    `ackVersion: 'v1-2026-07'` and ends at the gate rather than an answer, 429 and network failure).
+
+- **`client/src/routes/useAuthRedirect.ts` + `client/src/hooks/AuthContext.tsx` (Task 7, committed):**
+  an unauthenticated visitor now lands on `/intreaba` instead of `/login`. Signing in is the
+  *outcome* of parking a question, not the price of admission, so the sign-in prompt lives inside
+  the gate.
+  - `useAuthRedirect.ts` — the brief's named change: `navigate(buildLoginRedirectUrl(…))` →
+    `navigate('/intreaba')`. The authenticated path is untouched.
+  - `AuthContext.tsx` — **not in the brief's file list, but changing `useAuthRedirect` alone does
+    not work.** `AuthContextProvider.silentRefresh` fires on mount for a logged-out visitor and,
+    on "no token" / refresh error, navigates to `buildLoginRedirectUrl()` — it wins the race
+    against `useAuthRedirect`'s 300ms timer, so `/` still landed on `/login` (reproduced in the
+    browser: console logs "Token is not present…" at 484ms, then `/login`). Its three anonymous
+    bounce sites now go through one `anonRedirectTarget()` helper. That helper **keeps upstream's
+    recursion guard**: `/login` and `/login/2fa` render inside this provider, so when the current
+    path already matches `/(?:^|\/)login(?:\/|$)/` it still defers to `buildLoginRedirectUrl()` —
+    otherwise the provider would bounce visitors off the sign-in page and make login impossible.
+    The login/logout *mutation* redirects are untouched. **Task 5 (Clerk) should re-check this file
+    — if it replaces the auth flow, `anonRedirectTarget` is the one thing that must survive.**
+  - Deliberate loss: upstream carried the source deep link as `?redirect_to=…`; the gate drops it.
+    An anonymous visitor has no session to resume, and everything past sign-in is owned by the
+    gate's own hand-off (Task 8 claims the parked question). Pinned by two replacement cases so it
+    can't silently come back.
+  - `client/src/routes/__tests__/useAuthRedirect.spec.tsx` — upstream's six `/login` assertions
+    retargeted at `/intreaba`; its four `redirect_to`-construction cases replaced by two that
+    assert the deep link is dropped (plain and subdirectory deployments).
+  - `client/src/hooks/__tests__/AuthContext.spec.tsx` — new describe block "anonymous visitors land
+    on the ask gate": no-token and refresh-error both go to `/intreaba`, `/login` and `/login/2fa`
+    are left alone. Upstream's existing cases are untouched (they cover the login-mutation paths,
+    which did not change).
+
 ## Local dev environment notes (not upstream deviations, but needed to boot)
 - Node/npm: repo pins Node `24.16.0` (`.nvmrc`) and `npm@11.13.0` (`packageManager` in
   package.json); no `engines` field enforces this. Machine default via nvm was Node

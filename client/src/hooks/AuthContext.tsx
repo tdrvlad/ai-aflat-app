@@ -31,6 +31,21 @@ import { SESSION_KEY, isSafeRedirect, getPostLoginRedirect } from '~/utils';
 import useTimeout from './useTimeout';
 import store from '~/store';
 
+/**
+ * ai-aflat: an unauthenticated visitor is sent to the public ask gate rather
+ * than to `/login` — signing in is the outcome of parking a question, not the
+ * price of admission. Mirrors `~/routes/useAuthRedirect`; both bounce paths must
+ * agree or they race each other on a cold load.
+ *
+ * Keeps upstream's "already on an auth route" guard (the one baked into
+ * `buildLoginRedirectUrl`): `/login` and `/login/2fa` render inside this
+ * provider, and bouncing them to the gate would make signing in impossible.
+ */
+const ANON_GATE_PATH = '/intreaba';
+const LOGIN_PATH_RE = /(?:^|\/)login(?:\/|$)/;
+const anonRedirectTarget = (): string =>
+  LOGIN_PATH_RE.test(window.location.pathname) ? buildLoginRedirectUrl() : ANON_GATE_PATH;
+
 const AuthContext = (import.meta.hot?.data?.__AuthContext ??
   createContext<TAuthContext | undefined>(undefined)) as React.Context<TAuthContext | undefined>;
 if (import.meta.hot) {
@@ -205,7 +220,7 @@ const AuthContextProvider = ({
         if (authConfig?.test === true) {
           return;
         }
-        navigate(buildLoginRedirectUrl());
+        navigate(anonRedirectTarget());
       },
       onError: (error) => {
         if (isExternalRedirectRef.current) {
@@ -215,7 +230,7 @@ const AuthContextProvider = ({
         if (authConfig?.test === true) {
           return;
         }
-        navigate(buildLoginRedirectUrl());
+        navigate(anonRedirectTarget());
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deps are stable at mount; adding refreshToken causes infinite re-fire
@@ -229,7 +244,7 @@ const AuthContextProvider = ({
       setUser(userQuery.data);
     } else if (userQuery.isError) {
       doSetError((userQuery.error as Error).message);
-      navigate(buildLoginRedirectUrl(), { replace: true });
+      navigate(anonRedirectTarget(), { replace: true });
     }
     if (error != null && error && isAuthenticated) {
       doSetError(undefined);
