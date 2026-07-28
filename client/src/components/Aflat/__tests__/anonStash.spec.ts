@@ -19,8 +19,8 @@ describe('anonStash', () => {
      * Task 8 reads this key by name and the server stores `ackVersion` verbatim,
      * so both halves of the contract are pinned here.
      */
-    expect(ACK_VERSION).toBe('v1-2026-07');
-    expect(ACK_KEY).toBe('aflat_ack_v1-2026-07');
+    expect(ACK_VERSION).toBe('v2-2026-08');
+    expect(ACK_KEY).toBe('aflat_ack_v2-2026-08');
   });
 
   it('round-trips a stashed question through the contract key', () => {

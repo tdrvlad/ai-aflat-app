@@ -15,7 +15,7 @@ import type { UseQueryResult } from '@tanstack/react-query';
  * record, so bump it whenever the copy below changes — old records must keep
  * saying which text was actually accepted.
  */
-export const CONSENT_WORDING_VERSION = 'v1-2026-07';
+export const CONSENT_WORDING_VERSION = 'v2-2026-08';
 
 export const PRIVACY_POLICY_URL = 'https://ai-aflat.ro/confidentialitate';
 

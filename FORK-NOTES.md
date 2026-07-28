@@ -530,3 +530,45 @@ Rule: every deviation from upstream = one line here, same commit.
   with `AFLAT_ANON_QUESTION_MAX=0` in the server env for the anonymous path. Remove this block (and
   set that var back to 5) when the v2 wording ships — see `.claude/tasks/task10-deploy-runbook.md`
   in the parent repo.
+
+- **Consent + acknowledgement wording v2 (committed):** the copy the product actually asks people to
+  accept, replacing the v1 placeholder wording that shipped with Tasks 5 and 8. Approved by the
+  product owner and through two language-review passes; spec is
+  `docs/superpowers/specs/2026-07-28-consent-wording-v2.md` in the parent repo. Both version
+  constants move `v1-2026-07` → `v2-2026-08`:
+  - `client/src/components/Aflat/anonStash.ts` — `ACK_VERSION`. `ACK_KEY` derives from it
+    (`aflat_ack_v2-2026-08`) and is deliberately **not** edited separately: the version lives in the
+    key *name*, so the bump alone re-asks every visitor with no migration, which is the intent. This
+    supersedes the `aflat_ack_v1-2026-07` in the Task 5 entry above.
+  - `client/src/components/Aflat/consent.ts` — `CONSENT_WORDING_VERSION`, which travels on every
+    consent record. Old records keep saying `v1-2026-07`, which is the point of storing it verbatim.
+    Supersedes the pin named in the Task 8 entry above.
+  - `client/src/locales/{ro,en}/translation.json` — five keys rewritten in both catalogs
+    (`com_aflat_ack_text`, `_consent_description`, `_consent_framing`, `_consent_gdpr_after`,
+    `_consent_title`) and one added (`com_aflat_consent_marketing_note`). RO is the source copy, EN
+    the fallback and the source of `TranslationKeys`, so both are hand-edited here — the upstream
+    "only touch EN, other locales are automated" rule does not apply to `com_aflat_*`. Both files
+    re-verified as parsing JSON and still strictly key-sorted after the edit. The substance of the
+    change: the wording now states that the answer arrives **by email**, and that topic statistics
+    are published from the questions while the question text never is.
+  - `client/src/components/Aflat/ConsentModal.tsx` — `ConsentRow` gains an optional `note` prop,
+    rendered in the right-hand column *below* the label span and therefore **outside** the element
+    `aria-labelledby` points at. Only the marketing row passes one. Putting it in `children` would
+    have folded it into the checkbox's accessible name and into its click target — someone reading
+    "you get the answer either way" and tapping it would have opted themselves into marketing email.
+    The label span and the note now share a `flex flex-col gap-1` wrapper so the note clears the
+    checkbox by layout rather than by a hand-tuned margin. Styling is existing tokens
+    (`text-xs text-text-secondary`); no hex, consistent with the rest of the fork.
+  - Tests: the four deliberate version/copy pins updated in the same commit
+    (`__tests__/anonStash.spec.ts`, `__tests__/ConsentModal.spec.tsx` ×2, `routes/__tests__/AnonAsk.spec.tsx`),
+    plus one new `ConsentModal` case pinning that the note renders, is not inside the label span, is
+    not part of the checkbox's accessible name, and does not toggle the box when clicked. Verified by
+    mutation: folding the note back into `children` fails that case on the accessible-name query.
+    The server-side tests (`api/server/routes/{consents,anonQuestions}.test.js`) needed **no** change
+    — they use the version strings only as payload literals and deliberately assert the server stores
+    whatever the client sends without validating it.
+  - **Not done here, on purpose:** `client/src/**` changed, so this needs a client rebuild and a
+    reship before it reaches production. The collection gate is also still shut — the `registration:`
+    block in `librechat.yaml` and `AFLAT_ANON_QUESTION_MAX=0` — and that file's gate comment still
+    reads "approved but not yet in the code", which is now stale. Opening the gate and correcting
+    that comment are sequenced by the deploy runbook, not by this change.

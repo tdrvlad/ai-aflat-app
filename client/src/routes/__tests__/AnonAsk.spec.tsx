@@ -94,7 +94,7 @@ describe('AnonAsk (/ask)', () => {
     const [, init] = questionCalls()[0];
     expect(JSON.parse(init.body)).toEqual({
       text: 'Câte zile de preaviz am?',
-      ackVersion: 'v1-2026-07',
+      ackVersion: 'v2-2026-08',
     });
     expect(localStorage.getItem(ACK_KEY)).not.toBeNull();
 

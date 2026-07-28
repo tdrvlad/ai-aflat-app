@@ -24,17 +24,25 @@ import { useLocalize } from '~/hooks';
  * session and blocks every authenticated route, not just the chat.
  */
 
+/**
+ * `note` is deliberately rendered outside the `aria-labelledby` target: it is a
+ * clarification *about* the choice, not part of it. Inside the label span it
+ * would be read out as the checkbox's own name and would extend the click
+ * target, so a user aiming at the reassurance would toggle the box instead.
+ */
 function ConsentRow({
   id,
   testId,
   checked,
   onCheckedChange,
+  note,
   children,
 }: {
   id: string;
   testId: string;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
+  note?: string;
   children: React.ReactNode;
 }) {
   const labelId = `${id}-label`;
@@ -48,9 +56,16 @@ function ConsentRow({
         onCheckedChange={(value) => onCheckedChange(value === true)}
         className="mt-0.5"
       />
-      <span id={labelId} data-testid={`${testId}-label`} className="text-sm text-text-primary">
-        {children}
-      </span>
+      <div className="flex flex-col gap-1">
+        <span id={labelId} data-testid={`${testId}-label`} className="text-sm text-text-primary">
+          {children}
+        </span>
+        {note != null && (
+          <p data-testid={`${testId}-note`} className="m-0 text-xs text-text-secondary">
+            {note}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -158,6 +173,7 @@ export default function ConsentModal() {
             testId="aflat-consent-marketing"
             checked={marketingOptIn}
             onCheckedChange={setMarketingOptIn}
+            note={localize('com_aflat_consent_marketing_note')}
           >
             {localize('com_aflat_consent_marketing')}
           </ConsentRow>

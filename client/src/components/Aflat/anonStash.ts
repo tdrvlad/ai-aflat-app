@@ -18,7 +18,7 @@
 const STASH_KEY = 'aflat_anon_q';
 
 /** Acknowledgement version — bump the suffix when the ack wording changes. */
-export const ACK_VERSION = 'v1-2026-07';
+export const ACK_VERSION = 'v2-2026-08';
 export const ACK_KEY = `aflat_ack_${ACK_VERSION}`;
 
 /**

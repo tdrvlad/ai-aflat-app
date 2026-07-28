@@ -63,10 +63,10 @@ describe('ConsentModal', () => {
 
     expect(await screen.findByTestId('aflat-consent-modal')).toBeVisible();
     expect(screen.getByTestId('aflat-consent-gdpr-label')).toHaveTextContent(
-      'I have read the Privacy policy and I agree to the processing of my data.',
+      'I have read the Privacy policy and I understand how my data is used.',
     );
     expect(screen.getByTestId('aflat-consent-framing-label')).toHaveTextContent(
-      'I understand that the answers are informational and are not legal advice.',
+      'I understand that ai-aflat provides information about legislation, not legal advice.',
     );
     expect(screen.getByTestId('aflat-consent-marketing-label')).toHaveTextContent(
       'I want to receive news about ai-aflat by email.',
@@ -75,6 +75,35 @@ describe('ConsentModal', () => {
       'href',
       'https://ai-aflat.ro/confidentialitate',
     );
+  });
+
+  /**
+   * The reassurance under the opt-in ("you get the answer either way") is a note
+   * *about* the choice, not part of it. If it were rendered inside the label span
+   * a screen reader would announce it as the checkbox's own name, and it would
+   * become part of the click target — so someone reading the reassurance and
+   * tapping it would opt themselves into marketing email. Both are pinned here.
+   */
+  it('shows the opt-in note without folding it into the checkbox', async () => {
+    renderModal();
+    await screen.findByTestId('aflat-consent-modal');
+
+    const note = screen.getByTestId('aflat-consent-marketing-note');
+    expect(note).toHaveTextContent(
+      'You get the answer to your question either way, whether you tick this or not.',
+    );
+
+    /* an exact-name match: any extra text folded in would fail this query */
+    const checkbox = screen.getByRole('checkbox', {
+      name: 'I want to receive news about ai-aflat by email.',
+    });
+    expect(checkbox).toBe(marketingBox());
+    expect(screen.getByTestId('aflat-consent-marketing-label')).not.toContainElement(note);
+
+    /* and it is not clickable surface for the box it sits under */
+    expect(marketingBox()).toHaveAttribute('data-state', 'unchecked');
+    fireEvent.click(note);
+    expect(marketingBox()).toHaveAttribute('data-state', 'unchecked');
   });
 
   it('offers no way out — no close button, no escape, no backdrop', async () => {
@@ -126,7 +155,7 @@ describe('ConsentModal', () => {
       gdprAccepted: true,
       framingAccepted: true,
       marketingOptIn: false,
-      wordingVersion: 'v1-2026-07',
+      wordingVersion: 'v2-2026-08',
     });
 
     await waitFor(() =>
