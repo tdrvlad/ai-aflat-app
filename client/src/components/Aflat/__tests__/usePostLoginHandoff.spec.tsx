@@ -255,6 +255,53 @@ describe('usePostLoginHandoff', () => {
   });
 
   /**
+   * The same guard on the faster path. Signing out is a client-side navigation,
+   * not a page load, so page-context state outlives the session that created it:
+   * `undelivered` still holds the previous account's question when the next one
+   * signs in, and it is checked for exactly that reason.
+   */
+  it('never delivers a claimed question held in page state to a different account', async () => {
+    localStorage.clear();
+    clearClaimMarker();
+    (window as Window & { __aflatHandoff?: unknown }).__aflatHandoff = {
+      claimStarted: false,
+      undelivered: { id: 'q-1', text: 'Pot fi concediat în concediu medical?', uid: 'user-1' },
+    };
+    mockUser = { id: 'user-2' };
+
+    renderHandoff();
+    await settle();
+
+    expect(mockSubmitMessage).not.toHaveBeenCalled();
+    expect(claimCalls()).toHaveLength(0);
+  });
+
+  /**
+   * Consuming the stash before the submit means the only copy is in memory while
+   * the submit runs, and `submitMessage` calls `ask` synchronously without
+   * catching it. A chat tree that throws must not also take the question with it
+   * — the credential is spent, so nothing could ever recover it.
+   */
+  it('puts a claimed question back when the submit throws', async () => {
+    saveStash({ id: 'q-1', text: 'Nu mă pierde', claimed: true, uid: 'user-1' });
+    clearClaimMarker();
+    delete (window as Window & { __aflatHandoff?: unknown }).__aflatHandoff;
+    mockSubmitMessage.mockImplementation(() => {
+      throw new Error('the chat tree exploded');
+    });
+
+    try {
+      renderHandoff();
+    } catch {
+      /* Whatever the chat tree does with it is not this hook's business. */
+    }
+    await settle();
+
+    expect(mockSubmitMessage).toHaveBeenCalledTimes(1);
+    expect(readStash()).toMatchObject({ text: 'Nu mă pierde', claimed: true, uid: 'user-1' });
+  });
+
+  /**
    * The `claimed` copy lives in `localStorage`, which every tab of this browser
    * shares, so it is consumed before the submit rather than after it — otherwise
    * a second page context finds a question that still looks undelivered and asks

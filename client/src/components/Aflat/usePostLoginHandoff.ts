@@ -298,12 +298,23 @@ export default function usePostLoginHandoff() {
        * as the claim path below, for the same reason.
        */
       clearStash();
-      if (!deliverable() || submitRef.current({ text: pending.text }) === false) {
-        /* Still ours, still unasked — keep both records of that for a later mount. */
-        hold(pending);
-        return;
+      /**
+       * The only copy is now in memory, so anything short of a delivery has to
+       * put it back — including `ask` throwing on its way through the chat tree,
+       * which `submitMessage` calls synchronously and does not catch.
+       */
+      let delivered = false;
+      try {
+        delivered = deliverable() && submitRef.current({ text: pending.text }) !== false;
+      } finally {
+        if (!delivered) {
+          /* Still ours, still unasked — keep both records of that for a later mount. */
+          hold(pending);
+        }
       }
-      state.undelivered = null;
+      if (delivered) {
+        state.undelivered = null;
+      }
       return;
     }
 

@@ -432,10 +432,31 @@ Rule: every deviation from upstream = one line here, same commit.
   cookie that a browser restart would drop on precisely the storage-blocked browser it exists for;
   and a held question keeps one `ts` across repeated failed deliveries instead of rolling the 24h
   window forward a step at a time.
-  - Accepted cost, recorded deliberately: between spending both signals and the response landing,
-    the browser holds no record that anything was parked, so a tab that dies mid-claim loses the
-    question even though the credential stays valid. That is the trade for closing the duplicate-ask
-    window, and it needs a page to die inside one request.
+  - Accepted cost, recorded deliberately: consuming a signal before the operation it guards leaves a
+    window where the browser holds no persistent record that anything was parked. On the claim path
+    that window is the request itself, so a tab that dies mid-claim loses the question even though
+    the credential stays valid for 24h. On the delivery path it is only synchronous — no `await`
+    between the clear and the write-back, and a throw is caught — so a dying tab cannot hit it; what
+    remains is a `localStorage` write that fails while reads still work (quota), which loses the
+    stored copy while page state keeps the in-memory one. Both are the trade for closing the
+    duplicate-ask window. Closing them properly means marking the record *in flight* with a short
+    max-age instead of deleting it, which would cover both paths at once; ledgered, not done.
+
+- **Auth: `AUTH=clerk-oidc` (Task 5 decision record, no code deviation):** login is Clerk, reached
+  through LibreChat's stock OpenID strategy — **nothing in the source was changed for it.** The whole
+  integration is configuration in the untracked `.env`: LibreChat's own auth off
+  (`ALLOW_EMAIL_LOGIN=false`, `ALLOW_REGISTRATION=false`), social on, and the stock `OPENID_*` keys
+  pointed at Clerk with `OPENID_CALLBACK_URL=/oauth/openid/callback`,
+  `OPENID_SCOPE="openid profile email"`, `OPENID_AUTO_REDIRECT=true` (so `/login` never renders
+  LibreChat's form — intended UX, not a bug) and the Romanian button label. Values live only in
+  `.env` and are not recorded anywhere in this repo. The spike's gate was met on the Google leg
+  (verified in a browser, Mongo user document carries `provider: openid`); the email/password leg,
+  logout/re-login and the hosted page's Romanian localisation are **not** verified and belong to
+  Task 11's e2e. Branch `clerk-oidc` was created for this work and holds **zero commits** — there was
+  never anything to merge. Consequences worth knowing: local dev has no password login, which is why
+  browser e2e is deferred by design and why `.env` is off limits to implementers; and the configured
+  issuer is a Clerk **development** instance, so production needs a production instance — a new
+  issuer, not just a rotated secret — plus its own Google OAuth client.
 
 ## Local dev environment notes (not upstream deviations, but needed to boot)
 - Node/npm: repo pins Node `24.16.0` (`.nvmrc`) and `npm@11.13.0` (`packageManager` in

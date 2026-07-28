@@ -59,8 +59,10 @@ export type AnonStash = {
    */
   claimed?: boolean;
   /**
-   * The account a `claimed` question was confirmed to belong to, written only
-   * beside that flag. Direct delivery skips the server, so this is the only
+   * The account a `claimed` question was confirmed to belong to. Persisted
+   * whenever it is set, though the only caller that sets it writes it beside
+   * that flag — a `uid` without `claimed` is inert, since nothing reads one
+   * without the other. Direct delivery skips the server, so this is the only
    * thing left that can tell the owner from the next person to sign in on a
    * shared browser — where the question is already stamped with the *first*
    * account's id server-side, and would be shown to, and stored under, the
