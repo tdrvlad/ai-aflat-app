@@ -10,9 +10,11 @@ Rule: every deviation from upstream = one line here, same commit.
   line so our config — which holds only `${VAR}` references, no secrets — is trackable.
 - **`librechat.yaml` (Task 3, committed):** added, single custom endpoint `ai-aflat`
   wired to the Task-2 orchestrator (`http://127.0.0.1:8085/v1`), models
-  `cautare-simpla` (default) / `cautare-aprofundata`. Non-product surfaces hidden via
-  `interface`: `presets`, `prompts`, `bookmarks`, `multiConvo`, `agents` all `false`;
-  `modelSelect` left at its default `true` so users can switch search modes.
+  `simple-search` (default) / `deep-search` (renamed from `cautare-simpla` /
+  `cautare-aprofundata` — see the English-identifiers entry below). Non-product surfaces
+  hidden via `interface`: `presets`, `prompts`, `bookmarks`, `multiConvo`, `agents` all
+  `false`; `modelSelect` is now `false` (it was `true`) because the search-mode picker is
+  the `modelSpecs` list, not the endpoint list.
   `fileConfig.endpoints.custom.disabled: true` hides the composer's file-attach
   control for the custom endpoint. `titleConvo: false` on the endpoint (not just a
   global default) — titling would otherwise call the orchestrator and park a
@@ -164,7 +166,7 @@ Rule: every deviation from upstream = one line here, same commit.
 
 - **`api/server/routes/anonQuestions.js` + `api/server/middleware/limiters/aflatLimiters.js` (Task 6 review fix, committed):** `POST /:id/link` was an unthrottled, enumerable read of other visitors' question text — the claim is authorised by possession of the `_id` alone and a hit returns `text`, and Mongo ObjectIds are guessable once an attacker holds two of their own (constant 5-byte per-process random, bracketed 3-byte counter), so every *unclaimed* question in that window was brute-forceable. Added `anonQuestionLinkLimiter` (10/hour/IP via the existing `buildAnonLimiter`, env-overridable through `AFLAT_ANON_QUESTION_LINK_WINDOW`/`_MAX`), mounted ahead of `requireJwtAuth` so failed-auth attempts count against the same budget and `req.user` stays unset at limiter time. The claim itself was also find-then-save, so two concurrent claimers could both see `linkedUserId == null` and both get 200 plus the text; it is now one conditional `findOneAndUpdate` (`$or: [{linkedUserId: null}, {linkedUserId: userId}]`) whose pre-image gates the `gate_converted` emit — a losing claimer matches nothing and gets the same 404 as an unknown id, while same-user re-link stays 200 and idempotent.
 
-- **Anonymous ask gate — `/intreaba` (Task 7, committed):** the client half of the pre-signup
+- **Anonymous ask gate — `/ask` (Task 7, committed):** the client half of the pre-signup
   funnel. A visitor with no session types a legal question, it is parked server-side, and the gate
   asks for an account instead of showing an answer. **The gate never renders an answer and never
   cites anything** — it is a capture surface, not an assistant surface.
@@ -211,11 +213,11 @@ Rule: every deviation from upstream = one line here, same commit.
     `ackVersion: 'v1-2026-07'` and ends at the gate rather than an answer, 429 and network failure).
 
 - **`client/src/routes/useAuthRedirect.ts` + `client/src/hooks/AuthContext.tsx` (Task 7, committed):**
-  an unauthenticated visitor now lands on `/intreaba` instead of `/login`. Signing in is the
+  an unauthenticated visitor now lands on `/ask` instead of `/login`. Signing in is the
   *outcome* of parking a question, not the price of admission, so the sign-in prompt lives inside
   the gate.
   - `useAuthRedirect.ts` — the brief's named change: `navigate(buildLoginRedirectUrl(…))` →
-    `navigate('/intreaba')`. The authenticated path is untouched.
+    `navigate('/ask')`. The authenticated path is untouched.
   - `AuthContext.tsx` — **not in the brief's file list, but changing `useAuthRedirect` alone does
     not work.** `AuthContextProvider.silentRefresh` fires on mount for a logged-out visitor and,
     on "no token" / refresh error, navigates to `buildLoginRedirectUrl()` — it wins the race
@@ -232,10 +234,10 @@ Rule: every deviation from upstream = one line here, same commit.
     gate's own hand-off (Task 8 claims the parked question). Pinned by two replacement cases so it
     can't silently come back.
   - `client/src/routes/__tests__/useAuthRedirect.spec.tsx` — upstream's six `/login` assertions
-    retargeted at `/intreaba`; its four `redirect_to`-construction cases replaced by two that
+    retargeted at `/ask`; its four `redirect_to`-construction cases replaced by two that
     assert the deep link is dropped (plain and subdirectory deployments).
   - `client/src/hooks/__tests__/AuthContext.spec.tsx` — new describe block "anonymous visitors land
-    on the ask gate": no-token and refresh-error both go to `/intreaba`, `/login` and `/login/2fa`
+    on the ask gate": no-token and refresh-error both go to `/ask`, `/login` and `/login/2fa`
     are left alone. Upstream's existing cases are untouched (they cover the login-mutation paths,
     which did not change).
 
@@ -259,6 +261,37 @@ Rule: every deviation from upstream = one line here, same commit.
   an error state**. A missing/unparseable `id` skips the stash and still gates (the only cost is the
   post-signup auto-link, which Task 8 already treats as optional). Covered by storage-failure cases
   in `anonStash.spec.ts` and an end-to-end blocked-storage case in `AnonAsk.spec.tsx`.
+
+- **`client/src/routes/index.tsx` + `useAuthRedirect.ts` + `hooks/AuthContext.tsx` (Task 7 rename,
+  committed):** the gate's route is `/ask`, not `/intreaba`. Product owner's locked decision
+  (2026-07-28): **all code identifiers are English, including user-visible URL slugs**; Romanian
+  survives only as content, copy and labels. So the path is English while everything the visitor
+  *reads* on it stays Romanian. Both bounce paths were renamed together and still agree on the same
+  constant (`ANON_GATE_PATH`) — they race each other on a cold load, so a one-sided rename would
+  have reopened the `/login` race described above. `anonRedirectTarget()` and its
+  `/(?:^|\/)login(?:\/|$)/` recursion guard are unchanged. Verified live: logged-out
+  `http://localhost:3080/` lands on `/ask`, RO heading and sign-in link render, and `intreaba`
+  appears nowhere in the built bundle. No collision — every server mount is under `/api/` except
+  `/oauth`, and no other client route claims `ask`.
+
+- **`librechat.yaml` (Task 7 rename, committed):** model ids `cautare-simpla` → `simple-search`,
+  `cautare-aprofundata` → `deep-search`, same English-identifiers decision — these ids are shared
+  verbatim with the orchestrator, which is being renamed in parallel. The Romanian the user reads
+  moved into a new `modelSpecs` section as `label`: „Căutare simplă" (`default: true`) and
+  „Căutare aprofundată". Schema verified against `packages/data-provider/src/models.ts`
+  (`specsConfigSchema` / `tModelSpecSchema` / `tModelSpecPresetSchema`) in this tree rather than
+  from docs, and the whole file re-checked with `configSchema.strict()` — it parses with **no
+  unknown keys stripped**, so there is no silent drift.
+  - `interface.modelSelect` had to flip to `false`. `useEndpoints.ts` only empties its endpoint
+    list when `modelSelect` is false (`addedEndpoints` is unset, so nothing filters it), while
+    `ModelSelector.tsx` still renders the menu whenever `modelSpecs` is non-empty. Left at `true`
+    the picker would have listed the two Romanian labels *and* the `ai-aflat` endpoint expanded to
+    its raw English model ids — the labels would not have replaced the ids, just sat next to them.
+  - `enforce` left at its schema default `false`: enforcing requires every send to carry a spec,
+    and nothing outside the picker does yet (Task 8's claim flow included).
+  - Behaviour otherwise preserved: `ENDPOINTS=custom`, one visible `ai-aflat` endpoint, no
+    attachments, no balance. Confirmed by boot — the config loads with the labels intact, no
+    "Outdated Config version" line and none of `checkInterfaceConfig`'s conflict warnings.
 
 ## Local dev environment notes (not upstream deviations, but needed to boot)
 - Node/npm: repo pins Node `24.16.0` (`.nvmrc`) and `npm@11.13.0` (`packageManager` in

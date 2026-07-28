@@ -48,7 +48,7 @@ const createTestRouter = (basename = '/', initialEntry?: string) => {
       },
       {
         /** ai-aflat: unauthenticated visitors land on the public ask gate */
-        path: '/intreaba',
+        path: '/ask',
         element: <div data-testid="anon-ask-page">Anon Ask Page</div>,
       },
       {
@@ -93,7 +93,7 @@ describe('useAuthRedirect', () => {
     expect(getByTestId('test-component')).toBeInTheDocument();
   });
 
-  it('should redirect to /intreaba when user is not authenticated', async () => {
+  it('should redirect to /ask when user is not authenticated', async () => {
     (useAuthContext as jest.Mock).mockReturnValue({
       user: null,
       isAuthenticated: false,
@@ -108,7 +108,7 @@ describe('useAuthRedirect', () => {
     // Wait for the redirect to happen (300ms timeout + navigation)
     await waitFor(
       () => {
-        expect(router.state.location.pathname).toBe('/intreaba');
+        expect(router.state.location.pathname).toBe('/ask');
         expect(getByTestId('anon-ask-page')).toBeInTheDocument();
         expect(queryByTestId('test-component')).not.toBeInTheDocument();
       },
@@ -137,13 +137,13 @@ describe('useAuthRedirect', () => {
     await waitFor(
       () => {
         // Router state pathname includes the full path with basename
-        expect(router.state.location.pathname).toBe('/librechat/intreaba');
+        expect(router.state.location.pathname).toBe('/librechat/ask');
         expect(getByTestId('anon-ask-page')).toBeInTheDocument();
       },
       { timeout: 1000 },
     );
 
-    // The key point: navigate('/intreaba', { replace: true }) works correctly with basename
+    // The key point: navigate('/ask', { replace: true }) works correctly with basename
     // The router automatically prepends the basename to create the full URL
     expect(router.state.historyAction).toBe('REPLACE');
   });
@@ -159,7 +159,7 @@ describe('useAuthRedirect', () => {
 
     await waitFor(
       () => {
-        expect(router.state.location.pathname).toBe('/librechat/intreaba');
+        expect(router.state.location.pathname).toBe('/librechat/ask');
         expect(getByTestId('anon-ask-page')).toBeInTheDocument();
       },
       { timeout: 1000 },
@@ -168,7 +168,7 @@ describe('useAuthRedirect', () => {
     // The fact that navigation worked within the router proves we're using
     // navigate() and not window.location.href (which would cause a full reload
     // and break the test entirely). This maintains the SPA experience.
-    expect(router.state.location.pathname).toBe('/librechat/intreaba');
+    expect(router.state.location.pathname).toBe('/librechat/ask');
   });
 
   it('should clear timeout on unmount', async () => {
@@ -227,7 +227,7 @@ describe('useAuthRedirect', () => {
 
     await waitFor(
       () => {
-        expect(router.state.location.pathname).toBe('/intreaba');
+        expect(router.state.location.pathname).toBe('/ask');
       },
       { timeout: 1000 },
     );
@@ -247,7 +247,7 @@ describe('useAuthRedirect', () => {
 
     await waitFor(
       () => {
-        expect(router.state.location.pathname).toBe('/librechat/intreaba');
+        expect(router.state.location.pathname).toBe('/librechat/ask');
       },
       { timeout: 1000 },
     );

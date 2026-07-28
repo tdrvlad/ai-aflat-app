@@ -8,7 +8,7 @@ import { useAuthContext } from '~/hooks';
  * admission, so the sign-in prompt lives inside the gate. The authenticated
  * path is untouched.
  */
-const ANON_GATE_PATH = '/intreaba';
+const ANON_GATE_PATH = '/ask';
 
 export default function useAuthRedirect() {
   const { user, roles, isAuthenticated } = useAuthContext();

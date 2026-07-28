@@ -67,7 +67,7 @@ export const router = createBrowserRouter(
        * ai-aflat: the public ask gate. Deliberately outside `AuthLayout` — it must
        * render with no session, no auth context and no authenticated queries.
        */
-      path: 'intreaba',
+      path: 'ask',
       element: <AnonAsk />,
       errorElement: <RouteErrorBoundary />,
     },

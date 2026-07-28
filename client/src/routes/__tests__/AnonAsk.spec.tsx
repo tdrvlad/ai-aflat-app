@@ -20,7 +20,7 @@ const jsonResponse = (status: number, body: unknown) =>
     json: async () => body,
   }) as Response;
 
-describe('AnonAsk (/intreaba)', () => {
+describe('AnonAsk (/ask)', () => {
   let fetchMock: jest.Mock;
 
   beforeEach(() => {

@@ -612,16 +612,16 @@ describe('AuthContextProvider — anonymous visitors land on the ask gate', () =
     window.history.replaceState({}, '', '/');
   });
 
-  it('sends a visitor with no token to /intreaba', () => {
+  it('sends a visitor with no token to /ask', () => {
     window.history.replaceState({}, '', '/c/new');
     runSilentRefresh('no-token');
-    expect(mockNavigate).toHaveBeenCalledWith('/intreaba');
+    expect(mockNavigate).toHaveBeenCalledWith('/ask');
   });
 
-  it('sends a visitor whose refresh failed to /intreaba', () => {
+  it('sends a visitor whose refresh failed to /ask', () => {
     window.history.replaceState({}, '', '/c/new');
     runSilentRefresh('error');
-    expect(mockNavigate).toHaveBeenCalledWith('/intreaba');
+    expect(mockNavigate).toHaveBeenCalledWith('/ask');
   });
 
   it('leaves a visitor already on /login alone (no bounce off the sign-in page)', () => {

@@ -1,5 +1,5 @@
 /**
- * Local persistence for the anonymous ask gate (`/intreaba`).
+ * Local persistence for the anonymous ask gate (`/ask`).
  *
  * Two independent pieces of state, both deliberately in `localStorage` so they
  * survive the round trip through the identity provider:

@@ -41,7 +41,7 @@ import store from '~/store';
  * `buildLoginRedirectUrl`): `/login` and `/login/2fa` render inside this
  * provider, and bouncing them to the gate would make signing in impossible.
  */
-const ANON_GATE_PATH = '/intreaba';
+const ANON_GATE_PATH = '/ask';
 const LOGIN_PATH_RE = /(?:^|\/)login(?:\/|$)/;
 const anonRedirectTarget = (): string =>
   LOGIN_PATH_RE.test(window.location.pathname) ? buildLoginRedirectUrl() : ANON_GATE_PATH;
