@@ -42,7 +42,23 @@ export const STASH_MAX_AGE_MS = 24 * 60 * 60 * 1000;
  * is optional because the post-login handoff can learn a question's text from
  * the claim response on a browser where `/ask` could not write here at all.
  */
-export type AnonStash = { id?: string; text: string; ts?: number };
+export type AnonStash = {
+  id?: string;
+  text: string;
+  ts?: number;
+  /**
+   * Set once the server has confirmed this question belongs to the signed-in
+   * account but it could not be asked yet — the chat had moved on, or the user
+   * was mid-send. The claim credential is spent by then, so going back to the
+   * server would 404 and the text kept here is the only copy left; this flag is
+   * what tells the handoff to deliver it directly instead of re-claiming.
+   * Without it, a page reload inside that window threw the question away.
+   *
+   * It is not a credential and grants nothing — anyone who can set it can
+   * already type whatever they like into the composer.
+   */
+  claimed?: boolean;
+};
 
 /**
  * Returns false instead of throwing when storage is unavailable (all site data
@@ -62,7 +78,12 @@ export const saveStash = (q: AnonStash): boolean => {
   try {
     localStorage.setItem(
       STASH_KEY,
-      JSON.stringify({ id: q.id, text: q.text, ts: q.ts ?? Date.now() }),
+      JSON.stringify({
+        id: q.id,
+        text: q.text,
+        ts: q.ts ?? Date.now(),
+        ...(q.claimed === true ? { claimed: true } : {}),
+      }),
     );
     return true;
   } catch {

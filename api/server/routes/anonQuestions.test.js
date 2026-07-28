@@ -385,6 +385,30 @@ describe('POST /api/aflat/anon-questions/claim', () => {
   });
 
   /**
+   * The cookie is the one input that reaches the query without passing through
+   * `express-mongo-sanitize`: that middleware runs before `cookieParser` and so
+   * never sees `req.cookies`, while cookie-parser's `JSONCookies` turns a `j:`
+   * prefixed value into a real object. A cookie of `j:{"$gt":""}` therefore
+   * arrives as a Mongo operator, and only the string check in front of the hash
+   * stops it from becoming one — "match any document with a claim hash", which
+   * would hand back a stranger's question.
+   */
+  it('rejects a JSON cookie that would smuggle a Mongo operator into the query', async () => {
+    const { id } = await park();
+    /* A real, signed-in attacker — the guard under test sits behind auth. */
+    mockCurrentUser = userA;
+
+    const res = await request(app)
+      .post('/api/aflat/anon-questions/claim')
+      .set('Cookie', `${CLAIM_COOKIE}=j:${JSON.stringify({ $gt: '' })}`)
+      .send({});
+
+    expect(res.status).toBe(404);
+    const doc = await AnonQuestion.findById(id).lean();
+    expect(doc.linkedUserId).toBeNull();
+  });
+
+  /**
    * A 404 is never transient here — it means no token, or a question that is
    * gone or already someone else's — so the browser is told to stop presenting
    * a credential that can no longer work. Leaving it would keep the marker alive

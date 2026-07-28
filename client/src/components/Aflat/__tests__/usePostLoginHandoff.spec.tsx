@@ -163,6 +163,57 @@ describe('usePostLoginHandoff', () => {
     expect(mockSubmitMessage).not.toHaveBeenCalled();
   });
 
+  /**
+   * Two tabs, one browser: cookies and `localStorage` are shared, page-context
+   * state is not. The claim is idempotent for its owner, so if the second tab
+   * still sees a reason to claim while the first tab's request is in flight,
+   * both succeed and the question is asked twice — two conversations, two
+   * orchestrator jobs. The server does clear the marker, but only when the
+   * response lands, which is 0.3–2s too late on mobile. Spending it in the
+   * browser, synchronously, is what actually closes the window.
+   */
+  it('does not let a second tab claim while the first tab is still claiming', async () => {
+    stashQuestion();
+    const held = deferred<{ id: string; text: string }>();
+    mockedRequest.post.mockReturnValue(held.promise);
+
+    renderHandoff();
+    await waitFor(() => expect(claimCalls()).toHaveLength(1));
+
+    /* The other tab: same cookies and storage, its own page-context state. */
+    delete (window as Window & { __aflatHandoff?: unknown }).__aflatHandoff;
+    renderHandoff();
+    await settle();
+
+    expect(claimCalls()).toHaveLength(1);
+
+    held.resolve({ id: 'q-1', text: 'Câte zile de preaviz am?' });
+    await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(1));
+  });
+
+  /**
+   * The window between "the server says it is ours" and "it has been asked".
+   * The credential is spent by then, so a reload used to send the hook back for
+   * a 404 and throw away the text it was still holding. The stash records that
+   * the question is already ours, and that record outlives the page.
+   */
+  it('asks a claimed-but-undelivered question after a hard reload, without re-claiming', async () => {
+    /* Delivery failed once: chat had moved on, question written back as ours. */
+    saveStash({ id: 'q-1', text: 'Pot fi concediat în concediu medical?', claimed: true });
+    clearClaimMarker();
+    /* A hard reload: page-context state is gone, storage is not. */
+    delete (window as Window & { __aflatHandoff?: unknown }).__aflatHandoff;
+
+    renderHandoff();
+
+    await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(1));
+    expect(mockSubmitMessage).toHaveBeenCalledWith({
+      text: 'Pot fi concediat în concediu medical?',
+    });
+    expect(claimCalls()).toHaveLength(0);
+    expect(localStorage.getItem('aflat_anon_q')).toBeNull();
+  });
+
   /** A stale marker the server has not cleared yet still gets one attempt. */
   it('claims on the marker alone, with no local stash', async () => {
     clearClaimMarker();

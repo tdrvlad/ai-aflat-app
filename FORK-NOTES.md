@@ -400,6 +400,21 @@ Rule: every deviation from upstream = one line here, same commit.
   stash stops being a credential and becomes display state — `id` is no longer sent anywhere and
   proves nothing, so hand-editing the key gains an attacker nothing. The 24h expiry stays: it still
   stops a shared browser from showing the next visitor a stranger's question.
+- **Marker spent client-side, and a `claimed` stash flag (Task 6/7/8 hardening, fix round,
+  committed):** two corrections found by review of the above.
+  - The marker is expired **synchronously in the browser, immediately before the claim request** —
+    not left to the server's `Set-Cookie` on the response. The claim is idempotent for its owner, so
+    while it is in flight a second tab (session restore, duplicate tab) with its own page-context
+    state still saw the marker, claimed too, and got its own 200 + text: the same question asked
+    twice, in two conversations, at the cost of two orchestrator jobs. Waiting for the response left
+    that window open for the whole round trip — 0.3–2s on mobile. It is restored on a retryable
+    failure, so a storage-blocked browser does not lose its only signal.
+  - `AnonStash.claimed` records that the server has confirmed a question is this account's but it
+    could not be asked yet (chat moved on, or `ask` refused). The credential is spent by then, so a
+    reload in that window used to send the hook back for the 404 a spent credential earns — throwing
+    away text that was sitting in `localStorage`. Page state is the fast path; this flag is the part
+    that survives a reload. It is not a credential and grants nothing: anyone who can set it can
+    already type whatever they like into the composer.
 
 ## Local dev environment notes (not upstream deviations, but needed to boot)
 - Node/npm: repo pins Node `24.16.0` (`.nvmrc`) and `npm@11.13.0` (`packageManager` in
