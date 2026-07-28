@@ -489,3 +489,32 @@ Rule: every deviation from upstream = one line here, same commit.
   ships with the schema survives a rebuild or a restore into an empty database, which a
   hand-typed `createIndex` on the server does not. Verified against MongoDB 8.0.20 (partial +
   TTL accepted; the filter selects null-valued *and* field-absent documents).
+
+- **Cloudflare Web Analytics beacon (committed):** `client/index.html` gained one inline,
+  host-gated script that injects the cookieless Cloudflare beacon
+  (`static.cloudflareinsights.com/beacon.min.js`, token
+  `c89221bfaa9f45428061c170b690fd28`, site `app.ai-aflat.ro`). The token is public by
+  design — it ships in page source and identifies the site, not the visitor — so it is
+  committed rather than passed through env.
+  - **Why inline and not the upstream `analyticsGtmId` path.** Upstream carries the token
+    in `buildPublicSharePayload()` (`api/server/routes/config.js`), which `/api/config`
+    spreads **only into the authenticated branch** — `!req.user` gets `preLoginPayload`
+    without it. The consumer (`client/src/hooks/Config/useAppStartup.ts`) is called only
+    from `ChatRoute.tsx`. So that path never fires on login, register or shared
+    conversations, which is exactly the first-touch traffic we want counted. Inlining in
+    `index.html` covers every route, keeps the upstream-merge surface to one file, and
+    sidesteps Vite's build-time env inlining entirely.
+  - Gated on `location.hostname === 'app.ai-aflat.ro'`, so `frontend:dev` (port 3090),
+    `backend:dev` (3080) and any preview host send nothing.
+  - Uses the vendor's `type="module"` markup. The served `beacon.min.js` is currently a
+    classic script (no import/export), so `defer` would also work — matching the vendor
+    keeps it correct if Cloudflare converts the file to a real ES module.
+  - Covered by `client/src/__tests__/analytics.spec.js`, which executes the shipped inline
+    source against a spoofed hostname (not a string match). Verified by mutation: removing
+    the host gate and swapping in the marketing-site token each fail the suite.
+  - **Open compliance item:** the app's privacy policy is the website's
+    (`interface.privacyPolicy.externalUrl` → `https://ai-aflat.ro/confidentialitate`).
+    That page now discloses Cloudflare Web Analytics for the *website*. Before
+    `app.ai-aflat.ro` serves real users, the Art. 13 notice must also cover the app —
+    fold it into `docs/superpowers/specs/2026-07-28-consent-wording-v2.md` rather than
+    editing the page twice.

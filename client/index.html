@@ -133,6 +133,28 @@
         });
       })();
     </script>
+    <!-- Cloudflare Web Analytics — cookieless: no cookies, no storage, no cross-site
+         tracking, no profiles. Inlined here rather than plumbed through /api/config
+         because startup config only reaches the authenticated chat route, which would
+         miss login, register and shared conversations. The token is public by design
+         (it ships in page source) and identifies the site, not the visitor.
+         Gated on the production host so local and preview runs count nothing. -->
+    <script>
+      (function () {
+        var HOSTS = ['app.ai-aflat.ro'];
+        if (HOSTS.indexOf(location.hostname) === -1) {
+          return;
+        }
+        var beacon = document.createElement('script');
+        beacon.type = 'module';
+        beacon.src = 'https://static.cloudflareinsights.com/beacon.min.js';
+        beacon.setAttribute(
+          'data-cf-beacon',
+          JSON.stringify({ token: 'c89221bfaa9f45428061c170b690fd28' }),
+        );
+        document.head.appendChild(beacon);
+      })();
+    </script>
     <script defer type="module" src="/src/main.jsx"></script>
   </head>
   <body>
