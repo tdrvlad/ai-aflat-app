@@ -34,6 +34,19 @@ describe('anonStash', () => {
     expect(readStash()).toEqual(stored);
   });
 
+  /**
+   * The stash is display state, not a credential: authorisation to read a parked
+   * question back is the `aflat_claim` httpOnly cookie, and `id` is never sent
+   * anywhere. A question the post-login claim recovered from the server has no
+   * local id to carry, so the text has to stand on its own.
+   */
+  it('stashes a question that has no id', () => {
+    expect(saveStash({ text: 'Recuperată de la server' })).toBe(true);
+
+    expect(readStash()).toMatchObject({ text: 'Recuperată de la server' });
+    expect(readStash()!.id).toBeUndefined();
+  });
+
   it('returns null when nothing is stashed', () => {
     expect(readStash()).toBeNull();
   });

@@ -13,6 +13,7 @@ export interface IAnonQuestion extends Document {
   text: string;
   ackVersion: string;
   ackTs: Date;
+  claimTokenHash?: string | null;
   linkedUserId?: Types.ObjectId | null;
   linkedConvoId?: string | null;
   createdAt?: Date;
@@ -35,6 +36,22 @@ const anonQuestionSchema: Schema<IAnonQuestion> = new Schema(
       type: Date,
       required: true,
       default: Date.now,
+    },
+    /**
+     * SHA-256 of the one-time claim token handed to the visitor's browser as an
+     * httpOnly cookie, and the key the claim looks this document up by. The
+     * token itself is never stored, so a dump of this collection cannot be
+     * replayed into a claim; SHA-256 (not bcrypt/argon2) is right because the
+     * input is a 32-byte random secret, not a low-entropy password — there is
+     * nothing for a work factor to protect against.
+     *
+     * Not `unique`: it defaults to null for any document created outside the
+     * mint route, and a unique index would reject the second such document.
+     */
+    claimTokenHash: {
+      type: String,
+      default: null,
+      index: true,
     },
     linkedUserId: {
       type: Schema.Types.ObjectId,

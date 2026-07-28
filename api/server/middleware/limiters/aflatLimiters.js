@@ -46,13 +46,14 @@ const anonQuestionLimiter = buildAnonLimiter({
 /**
  * 10 claim attempts per hour per IP.
  *
- * A claim is authorised by possession of the question's `_id` alone, and a hit
- * returns the question text — so an unthrottled `:id/link` is an enumeration
- * oracle over other visitors' free-text legal questions (Mongo ObjectIds are
- * guessable once an attacker has two of their own: the 5-byte per-process
- * random is constant and the 3-byte counter is bracketed). A legitimate user
- * claims once, right after signup; 10/hour is far above that and far below what
- * makes brute force worthwhile.
+ * Defence in depth rather than the primary control: `POST /claim` is authorised
+ * by a 32-byte random token held in an httpOnly cookie and takes no id, so there
+ * is nothing enumerable left for this to throttle. It stays because a claim
+ * returns free-text legal questions and an unmetered endpoint that does that is
+ * worth a ceiling anyway. A legitimate user claims once, right after signup.
+ *
+ * Env names keep the historical `_LINK_` spelling so an existing `.env` keeps
+ * working (`AFLAT_ANON_QUESTION_LINK_WINDOW` / `_MAX`).
  */
 const anonQuestionLinkLimiter = buildAnonLimiter({
   windowInMinutes: Number(AFLAT_ANON_QUESTION_LINK_WINDOW),

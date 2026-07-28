@@ -369,6 +369,38 @@ Rule: every deviation from upstream = one line here, same commit.
   answer is still missing; the POST writes `{recorded:true}` into the cache and a refetch after that
   can only re-confirm it.
 
+- **`api/server/routes/anonQuestions.js` + `packages/data-schemas/src/schema/anonQuestion.ts`
+  (Task 6/7/8 hardening, committed):** a parked question is now claimed by an opaque token in an
+  httpOnly cookie instead of by its `_id`, and `POST /:id/link` is replaced by `POST /claim`, which
+  takes no id at all. The id was the whole problem: ObjectIds are partially predictable — the 5-byte
+  per-process random is constant and the 3-byte counter is bracketed by any two ids an attacker mints
+  themselves — so an authenticated caller could walk the space and read back strangers' free-text
+  legal questions, with only a 10/h/IP limiter in the way. With no id in the request there is nothing
+  left to enumerate. The token is 32 random bytes, returned to the browser only as a cookie (never in
+  a response body, so no client-side error reporter can log it) and stored only as its SHA-256, so a
+  dump of the collection cannot be replayed into a claim. SHA-256 rather than bcrypt/argon2 is
+  deliberate: the input is a high-entropy secret, not a password, and a work factor protects against
+  nothing here. The claim looks the document up *by* that hash, which is also why a constant-time
+  compare is moot. `sameSite: 'lax'` is load-bearing — the return from hosted sign-in is a top-level
+  navigation, which Lax permits and Strict would drop, taking the handoff with it; `secure` follows
+  the fork's own `shouldUseSecureCookie()` so dev on `http://localhost:3080` still works. Both cookies
+  are cleared on a successful claim and on a 404: the claim is idempotent for its owner, so a cookie
+  left in place would re-deliver the same question on every page load for 24h.
+- **`aflat_claim_present` marker cookie (Task 6/7/8 hardening, committed):** a second, contentless
+  cookie carrying `1`, readable by the client, set and cleared alongside the credential. It exists
+  because the client otherwise cannot tell whether a claim is worth attempting — the credential is
+  `httpOnly` by design and the local stash may be missing on exactly the storage-blocked browsers the
+  cookie was introduced to rescue — so it would have to claim on **every** authenticated page load.
+  That spends the shared 10/h/IP budget on users who parked nothing, and behind carrier NAT (common
+  for Romanian mobile) ordinary browsing would throttle out the real claims. It is set at `path: '/'`,
+  not the credential's `/api/aflat`: `document.cookie` only exposes cookies whose path matches the
+  reading page, and the page that reads it is `/c/new`. Only the contentless flag is widened; the
+  secret keeps the narrow scope.
+- **`client/src/components/Aflat/anonStash.ts` (Task 6/7/8 hardening, committed):** the localStorage
+  stash stops being a credential and becomes display state — `id` is no longer sent anywhere and
+  proves nothing, so hand-editing the key gains an attacker nothing. The 24h expiry stays: it still
+  stops a shared browser from showing the next visitor a stranger's question.
+
 ## Local dev environment notes (not upstream deviations, but needed to boot)
 - Node/npm: repo pins Node `24.16.0` (`.nvmrc`) and `npm@11.13.0` (`packageManager` in
   package.json); no `engines` field enforces this. Machine default via nvm was Node

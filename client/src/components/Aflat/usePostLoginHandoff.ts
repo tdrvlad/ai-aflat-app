@@ -12,27 +12,78 @@ import { clearStash, readStash, saveStash } from './anonStash';
  *
  * This is the only place in the product that submits a message the user did not
  * just type, so it is deliberately conservative — see the guards below.
+ *
+ * The claim carries no id. Authorisation is the `aflat_claim` httpOnly cookie
+ * the server set when the question was parked; the browser attaches it on its
+ * own and this code never sees it. Two consequences shape everything here:
+ *  - the local stash is not required to claim, so the handoff still works on a
+ *    browser where `localStorage` silently refused the write (Safari private
+ *    mode) — the question is recovered from the server instead;
+ *  - the cookie is spent on the first successful claim, so a question that was
+ *    claimed but could not be delivered can never be claimed again. It is held
+ *    in page-context state until this page can deliver it.
  */
 
-/** Backend contract for `POST /api/aflat/anon-questions/:id/link`. */
-type LinkedQuestion = { id?: string; text?: string };
+/** Backend contract for `POST /api/aflat/anon-questions/claim`. */
+type ClaimedQuestion = { id?: string; text?: string };
 
-const linkUrl = (id: string) => `${apiBaseUrl()}/api/aflat/anon-questions/${id}/link`;
+/** A claimed question waiting for a place to be asked. */
+type PendingQuestion = { text: string; id?: string; ts?: number };
+
+const claimUrl = () => `${apiBaseUrl()}/api/aflat/anon-questions/claim`;
+
+type HandoffState = {
+  /** A claim has gone out in this page context (in flight, or settled). */
+  claimStarted: boolean;
+  /** Claimed from the server, not yet asked. Unrecoverable if this page goes away. */
+  undelivered: PendingQuestion | null;
+};
+
+type HandoffWindow = Window & { __aflatHandoff?: HandoffState };
 
 /**
- * Questions already claimed (or in flight) in this page session. The stash is
- * cleared before the claim goes out, so in the normal case that clear is what
- * stops a second mount from claiming the same id. This set is the guard for when
- * it cannot: `localStorage.removeItem` throws on a browser with site data blocked
- * (Safari private mode, "block all cookies"), `clearStash` swallows that by
- * contract, and the stash then survives the whole claim. Without this set, a
- * `ChatForm` remount mid-claim — a conversation switch, a route change — would
- * read that surviving stash and claim it a second time.
+ * Page-context state, on `window` rather than in a module closure for the same
+ * reason `librechat-data-provider`'s auth-recovery state is (`request.ts`): its
+ * lifetime is the page, not the module instance, and a `ChatForm` remount — a
+ * conversation switch, a route change — must not hand it a clean slate. A hard
+ * navigation is exactly what *should* reset it.
  */
-const handledIds = new Set<string>();
+const handoffState = (): HandoffState => {
+  const w = window as HandoffWindow;
+  if (w.__aflatHandoff == null) {
+    w.__aflatHandoff = { claimStarted: false, undelivered: null };
+  }
+  return w.__aflatHandoff;
+};
 
 const statusOf = (error: unknown): number | undefined =>
   (error as { response?: { status?: number } } | undefined)?.response?.status;
+
+const usableText = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim() ? value : null;
+
+/**
+ * The contentless flag the server sets beside the httpOnly claim credential.
+ *
+ * It is the only way this code can know a claim is worth making: the credential
+ * itself is unreadable by design, and the stash may be absent on a browser that
+ * refuses `localStorage` — the very case the cookie exists to cover. Without
+ * this check every authenticated page load would spend one of the 10/h/IP claim
+ * attempts on users who have nothing parked, and that budget is shared behind
+ * carrier NAT, so ordinary browsing would throttle out real claims.
+ */
+const CLAIM_MARKER_COOKIE = 'aflat_claim_present';
+
+const hasClaimMarker = (): boolean => {
+  try {
+    return document.cookie
+      .split(';')
+      .some((entry) => entry.trim().startsWith(`${CLAIM_MARKER_COOKIE}=`));
+  } catch {
+    /* No document.cookie access (sandboxed iframe) — fall back to the stash. */
+    return false;
+  }
+};
 
 export default function usePostLoginHandoff() {
   const { data: consent } = useConsentStatus();
@@ -80,7 +131,7 @@ export default function usePostLoginHandoff() {
    * reports that the same way it reports success, so this has to be checked
    * before calling rather than after: a user who typed and sent their own
    * message during the claim would otherwise have the parked one dropped on the
-   * floor, with the stash already cleared and nothing to retry from.
+   * floor.
    */
   const isSubmittingRef = useRef(isSubmitting);
   isSubmittingRef.current = isSubmitting;
@@ -106,109 +157,137 @@ export default function usePostLoginHandoff() {
       return;
     }
 
-    const stash = readStash();
-    if (stash == null) {
-      return;
-    }
-    if (
-      typeof stash.id !== 'string' ||
-      !stash.id ||
-      typeof stash.text !== 'string' ||
-      !stash.text.trim()
-    ) {
-      /* Nothing claimable in there — drop it so it stops being read every mount. */
+    const state = handoffState();
+    const startedInConversationId = conversationIdRef.current;
+
+    /** Everything the question needs to still be a *deliverable* question. */
+    const deliverable = () =>
+      mountedRef.current &&
+      readyRef.current &&
+      conversationIdRef.current === startedInConversationId &&
+      isSubmittingRef.current !== true;
+
+    /**
+     * A question this page already claimed and could not ask yet — the chat had
+     * moved on, or `ask` refused. The cookie that authorised the claim is spent,
+     * so there is nothing to re-claim: this is the only copy, and it is asked
+     * without going back to the server.
+     */
+    const pending = state.undelivered;
+    if (pending != null) {
+      startedRef.current = true;
+      if (!deliverable() || submitRef.current({ text: pending.text }) === false) {
+        startedRef.current = false;
+        return;
+      }
+      state.undelivered = null;
       clearStash();
       return;
     }
-    if (handledIds.has(stash.id)) {
+
+    if (state.claimStarted) {
       return;
     }
 
-    const { id, text: stashedText, ts } = stash;
-    const startedInConversationId = conversationIdRef.current;
+    /**
+     * Display copy only, and only a fallback: the server's answer to the claim
+     * is authoritative. Its absence is not a reason to skip the claim — on a
+     * browser that refuses `localStorage` the cookie is the only thing that
+     * survived the trip through the identity provider.
+     */
+    const stash = readStash();
+    const stashed: PendingQuestion | null =
+      stash == null || usableText(stash.text) == null
+        ? null
+        : { text: stash.text, id: stash.id, ts: stash.ts };
+
+    /**
+     * Either signal is enough — the marker covers the storage-blocked browser,
+     * the stash covers a marker the server has already cleared — but with
+     * neither, this account parked nothing and the claim would only burn a
+     * shared rate-limit slot to be told so.
+     */
+    if (!hasClaimMarker() && stashed == null) {
+      return;
+    }
+
     startedRef.current = true;
-    handledIds.add(id);
+    state.claimStarted = true;
 
     /**
      * Undelivered means untouched. Puts the question back exactly as it was —
      * same `ts`, so the 24h window is the visitor's original one — and releases
-     * both guards, so a later mount performs a real retry rather than skipping
-     * an id it thinks is already handled. The re-claim is safe: the link route
-     * matches `linkedUserId: null` *or* the caller's own id, so re-claiming a
-     * question this account already owns returns 200 and the text again.
+     * the instance guard so a later mount can pick it up again.
      */
-    const park = () => {
-      saveStash({ id, text: stashedText, ts });
-      handledIds.delete(id);
+    const park = (question: PendingQuestion) => {
+      saveStash({ id: question.id, text: question.text, ts: question.ts });
       startedRef.current = false;
     };
 
     void (async () => {
       /**
-       * Cleared before the claim goes out, not after it returns. The stash lives
-       * in `localStorage` and is therefore shared by every tab of this browser,
-       * while `handledIds` is per page context — two tabs open on the app after a
-       * signup would both read the same stash, and the link route is idempotent
-       * for its owner, so both would get a 200 and both would ask the question:
-       * two conversations, two orchestrator jobs, one question. Clearing first
-       * narrows that window to a single synchronous storage write, and `park()`
-       * puts the question back whenever it turns out not to have been delivered.
+       * Cleared before the claim goes out, not after it returns: the stash is a
+       * display copy of a question that is about to become the account's, and
+       * leaving it readable while the claim is in flight invites a second tab to
+       * treat it as still-parked. What actually stops a double ask is that the
+       * cookie is spent by the first claim to reach the server.
        */
       clearStash();
 
-      let linked: LinkedQuestion;
+      let claimed: ClaimedQuestion;
       try {
-        linked = await request.post(linkUrl(id), {});
+        claimed = await request.post(claimUrl(), {});
       } catch (error) {
         if (statusOf(error) === 404) {
           /**
-           * Stale stash: the question was already claimed by another account, or
-           * never existed. Indistinguishable by design, and both mean the same
-           * thing here — there is nothing left to hand off, so it stays cleared.
+           * No claim cookie, or a question already claimed — indistinguishable
+           * by design, and both mean the same thing here: this browser has
+           * nothing parked, so there is nothing to hand off and nothing to
+           * retry.
            */
           return;
         }
         /**
          * Throttled (the claim route is 10/h/IP), server error, or offline. The
-         * question is still parked server-side and still claimable, so it goes
-         * back into the stash and a later mount retries. Deliberately silent: the
-         * user asked for an answer, not for a report on our rate limiter, and the
-         * composer in front of them already works.
+         * question is still parked and the cookie is still unspent, so a later
+         * mount claims again. Deliberately silent: the user asked for an answer,
+         * not for a report on our rate limiter, and the composer in front of
+         * them already works.
          */
-        park();
+        state.claimStarted = false;
+        if (stashed != null) {
+          park(stashed);
+        } else {
+          startedRef.current = false;
+        }
         return;
       }
+
+      /** The server's copy is authoritative — localStorage is the user's to edit. */
+      const text = usableText(claimed?.text) ?? stashed?.text;
+      if (text == null) {
+        return;
+      }
+      const question: PendingQuestion = {
+        text,
+        id: typeof claimed?.id === 'string' ? claimed.id : stashed?.id,
+        ts: stashed?.ts,
+      };
 
       /**
        * The claim succeeded, which only means the question is *ours* — not that
        * this is still a place to ask it. In the time the round trip took, the
        * component may have unmounted (a jump to `/search`, `/prompts`), the user
        * may have opened another conversation from the sidebar, or they may have
-       * typed and sent a message of their own. Submitting anyway would put the
-       * question in the wrong conversation, into an unmounted view, or nowhere at
-       * all. None of those may consume the question: it goes back in the stash.
+       * typed and sent a message of their own; and `ask` itself may refuse to
+       * append to a preliminary assistant message. None of those may consume the
+       * question — but the cookie is spent, so it is held in page state (and
+       * mirrored to the stash for display) rather than left to a re-claim that
+       * would now 404.
        */
-      if (
-        !mountedRef.current ||
-        !readyRef.current ||
-        conversationIdRef.current !== startedInConversationId ||
-        isSubmittingRef.current === true
-      ) {
-        park();
-        return;
-      }
-
-      /** The server's copy is authoritative — localStorage is the user's to edit. */
-      const text =
-        typeof linked?.text === 'string' && linked.text.trim() ? linked.text : stashedText;
-
-      /**
-       * `false` is `ask` refusing to append to a preliminary assistant message.
-       * A refusal is not a delivery, so the question goes back rather than
-       * disappearing into a return value nobody read.
-       */
-      if (submitRef.current({ text }) === false) {
-        park();
+      if (!deliverable() || submitRef.current({ text }) === false) {
+        state.undelivered = question;
+        park(question);
       }
     })();
   }, [ready]);

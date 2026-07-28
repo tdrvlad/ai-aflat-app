@@ -14,6 +14,11 @@ import { STASH_MAX_AGE_MS, readStash, saveStash } from '../anonStash';
  * "the question is gone", and asking a question that belongs to whoever used
  * this browser last.
  *
+ * The claim is authorised by an httpOnly cookie the browser attaches by itself,
+ * so nothing here — and nothing in the hook — ever names a question id. What the
+ * mocked `request.post` stands in for is "the server recognised this browser's
+ * cookie" (resolve) or "it did not" (404).
+ *
  * Test language is pinned to `en` in `client/test/setupTests.js`; nothing here
  * renders copy.
  */
@@ -42,16 +47,11 @@ jest.mock('~/Providers/ChatContext', () => ({
 
 const mockedRequest = request as unknown as { get: jest.Mock; post: jest.Mock };
 
-const linkCalls = () =>
-  mockedRequest.post.mock.calls.filter(([url]) => String(url).includes('/link'));
+const claimCalls = () =>
+  mockedRequest.post.mock.calls.filter(([url]) => String(url).includes('/claim'));
 
-/** Distinct ids per case — the hook keeps a module-level "already handled" set. */
-let stashCounter = 0;
 const stashQuestion = (text = 'Câte zile de preaviz am?') => {
-  stashCounter += 1;
-  const id = `q-${stashCounter}`;
-  saveStash({ id, text });
-  return id;
+  saveStash({ id: 'q-1', text });
 };
 
 const axiosError = (status: number) =>
@@ -102,23 +102,99 @@ const renderHandoff = ({
 /** Lets any already-scheduled microtask/effect settle before asserting a negative. */
 const settle = () => waitFor(() => expect(true).toBe(true));
 
+/**
+ * The readable flag the server sets beside the httpOnly credential. It is what
+ * tells the hook a claim is worth making — without it the hook must stay quiet,
+ * so most tests here have to plant it explicitly.
+ */
+const MARKER = 'aflat_claim_present';
+const setClaimMarker = () => {
+  document.cookie = `${MARKER}=1; path=/`;
+};
+const clearClaimMarker = () => {
+  document.cookie = `${MARKER}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+};
+
 describe('usePostLoginHandoff', () => {
   beforeEach(() => {
     localStorage.clear();
+    clearClaimMarker();
+    setClaimMarker();
+    /* The hook's page-context state; a real page load always starts clean. */
+    delete (window as Window & { __aflatHandoff?: unknown }).__aflatHandoff;
     mockSubmitMessage.mockReset();
     mockedRequest.get.mockReset();
     mockedRequest.post.mockReset();
-    mockedRequest.post.mockResolvedValue({ id: 'q', text: 'server text' });
+    mockedRequest.post.mockResolvedValue({ id: 'q-1', text: 'server text' });
     mockConversation = { conversationId: 'new', endpoint: 'ai-aflat' };
     mockIsSubmitting = false;
   });
 
-  it('does nothing when there is no stashed question', async () => {
-    renderHandoff();
-    await settle();
+  /**
+   * The stash is a display copy, not a credential: the cookie is what says this
+   * browser parked a question. So a browser that never managed to write to
+   * `localStorage` — Safari private mode refuses the write and `saveStash`
+   * swallows it by contract — must still get its question back.
+   */
+  it('claims by cookie even when nothing was stashed locally', async () => {
+    mockedRequest.post.mockResolvedValue({ id: 'q-1', text: 'Recovered from the server' });
 
-    expect(linkCalls()).toHaveLength(0);
+    renderHandoff();
+
+    await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(1));
+    expect(mockSubmitMessage).toHaveBeenCalledWith({ text: 'Recovered from the server' });
+  });
+
+  /**
+   * The claim costs one of 10 attempts per hour per IP, and behind carrier NAT
+   * that budget is shared by everyone on the same mobile network. A user who
+   * never parked a question has nothing to claim, so asking would spend a slot —
+   * and enough ordinary page loads would throttle out the claims that matter.
+   * With neither signal present the hook must not reach the network at all.
+   */
+  it('does not claim at all when nothing says this browser parked a question', async () => {
+    clearClaimMarker();
+    localStorage.clear();
+
+    renderHandoff();
+
+    await settle();
+    expect(claimCalls()).toHaveLength(0);
     expect(mockSubmitMessage).not.toHaveBeenCalled();
+  });
+
+  /** A stale marker the server has not cleared yet still gets one attempt. */
+  it('claims on the marker alone, with no local stash', async () => {
+    clearClaimMarker();
+    localStorage.clear();
+    setClaimMarker();
+
+    renderHandoff();
+
+    await waitFor(() => expect(claimCalls()).toHaveLength(1));
+  });
+
+  /** No cookie, or a question already claimed: one indistinguishable 404. */
+  it('submits nothing when this browser has no parked question', async () => {
+    mockedRequest.post.mockRejectedValue(axiosError(404));
+
+    renderHandoff();
+
+    await waitFor(() => expect(claimCalls()).toHaveLength(1));
+    await settle();
+    expect(mockSubmitMessage).not.toHaveBeenCalled();
+  });
+
+  /** The claim carries no question id — there is nothing left to enumerate. */
+  it('claims without naming a question', async () => {
+    stashQuestion();
+
+    renderHandoff();
+
+    await waitFor(() => expect(claimCalls()).toHaveLength(1));
+    const [url, body] = claimCalls()[0];
+    expect(url).toBe('/api/aflat/anon-questions/claim');
+    expect(JSON.stringify(body ?? {})).not.toContain('q-1');
   });
 
   /**
@@ -130,7 +206,7 @@ describe('usePostLoginHandoff', () => {
     renderHandoff({ recorded: false });
     await settle();
 
-    expect(linkCalls()).toHaveLength(0);
+    expect(claimCalls()).toHaveLength(0);
     expect(mockSubmitMessage).not.toHaveBeenCalled();
     expect(readStash()).not.toBeNull();
   });
@@ -141,18 +217,18 @@ describe('usePostLoginHandoff', () => {
     renderHandoff();
     await settle();
 
-    expect(linkCalls()).toHaveLength(0);
+    expect(claimCalls()).toHaveLength(0);
     expect(readStash()).not.toBeNull();
   });
 
   it('claims the question, submits the server copy of it, and clears the stash', async () => {
-    const id = stashQuestion('Câte zile de preaviz am?');
-    mockedRequest.post.mockResolvedValue({ id, text: 'Câte zile de preaviz am?' });
+    stashQuestion('Câte zile de preaviz am?');
+    mockedRequest.post.mockResolvedValue({ id: 'q-1', text: 'Câte zile de preaviz am?' });
 
     renderHandoff();
 
     await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(1));
-    expect(linkCalls()[0][0]).toContain(`/api/aflat/anon-questions/${id}/link`);
+    expect(claimCalls()[0][0]).toContain('/api/aflat/anon-questions/claim');
     expect(mockSubmitMessage).toHaveBeenCalledWith({ text: 'Câte zile de preaviz am?' });
     expect(readStash()).toBeNull();
   });
@@ -160,14 +236,14 @@ describe('usePostLoginHandoff', () => {
   /** React strict/dev double-mount must not send the question twice. */
   it('submits exactly once under a strict-mode double mount', async () => {
     stashQuestion('O singură dată');
-    mockedRequest.post.mockResolvedValue({ id: 'x', text: 'O singură dată' });
+    mockedRequest.post.mockResolvedValue({ id: 'q-1', text: 'O singură dată' });
 
     renderHandoff({ strict: true });
 
     await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(1));
     await settle();
 
-    expect(linkCalls()).toHaveLength(1);
+    expect(claimCalls()).toHaveLength(1);
     expect(mockSubmitMessage).toHaveBeenCalledTimes(1);
   });
 
@@ -184,21 +260,21 @@ describe('usePostLoginHandoff', () => {
   });
 
   /**
-   * A throttled claim is not a lost question: the document is still parked and
-   * still claimable, so the stash comes back and a later mount retries. Nothing
-   * is shown to the user — the failure is ours, not theirs.
+   * A throttled claim is not a lost question: the document is still parked, the
+   * claim cookie is unspent, so the stash comes back and a later mount retries.
+   * Nothing is shown to the user — the failure is ours, not theirs.
    */
   it('keeps the stash on 429 and retries on a later mount', async () => {
     stashQuestion('Retry me');
     mockedRequest.post.mockRejectedValueOnce(axiosError(429));
 
     const first = renderHandoff();
-    await waitFor(() => expect(linkCalls()).toHaveLength(1));
+    await waitFor(() => expect(claimCalls()).toHaveLength(1));
     await waitFor(() => expect(readStash()).not.toBeNull());
     expect(mockSubmitMessage).not.toHaveBeenCalled();
     first.unmount();
 
-    mockedRequest.post.mockResolvedValue({ id: 'y', text: 'Retry me' });
+    mockedRequest.post.mockResolvedValue({ id: 'q-1', text: 'Retry me' });
     renderHandoff();
 
     await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(1));
@@ -212,28 +288,30 @@ describe('usePostLoginHandoff', () => {
 
     renderHandoff();
 
-    await waitFor(() => expect(linkCalls()).toHaveLength(1));
+    await waitFor(() => expect(claimCalls()).toHaveLength(1));
     await waitFor(() => expect(readStash()).not.toBeNull());
     expect(mockSubmitMessage).not.toHaveBeenCalled();
   });
 
-  /** A corrupt stash must not wedge the hook or submit garbage. */
-  it('drops a malformed stash without submitting', async () => {
+  /** A corrupt stash must not wedge the hook; the cookie still decides. */
+  it('drops a malformed stash and falls back to the server copy', async () => {
     localStorage.setItem('aflat_anon_q', JSON.stringify({ id: 42, ts: Date.now() }));
+    mockedRequest.post.mockResolvedValue({ id: 'q-1', text: 'server text' });
 
     renderHandoff();
-    await settle();
 
-    expect(linkCalls()).toHaveLength(0);
-    expect(mockSubmitMessage).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(1));
+    expect(mockSubmitMessage).toHaveBeenCalledWith({ text: 'server text' });
     expect(readStash()).toBeNull();
   });
 
   /**
    * Shared browsers: the question a visitor parked and abandoned must not become
-   * the first thing the *next* person to sign up here is shown asking.
+   * the first thing the *next* person to sign up here is shown asking. The stash
+   * is only half of that guard — the claim cookie carries the same 24h limit —
+   * but an expired stash must still never be offered as text.
    */
-  it('never claims a question parked longer ago than the maximum age', async () => {
+  it('never submits a question parked longer ago than the maximum age', async () => {
     localStorage.setItem(
       'aflat_anon_q',
       JSON.stringify({
@@ -242,58 +320,78 @@ describe('usePostLoginHandoff', () => {
         ts: Date.now() - STASH_MAX_AGE_MS - 60_000,
       }),
     );
+    mockedRequest.post.mockRejectedValue(axiosError(404));
 
     renderHandoff();
     await settle();
 
-    expect(linkCalls()).toHaveLength(0);
     expect(mockSubmitMessage).not.toHaveBeenCalled();
     expect(readStash()).toBeNull();
   });
 
   /**
-   * Two tabs, one question. `handledIds` is per page context but the stash lives
-   * in `localStorage`, shared by every tab of the browser, and the link route is
-   * idempotent for its owner — it answers 200 with the text to whoever already
-   * owns it. So a second tab that can still read the stash while the first one's
-   * claim is in flight claims it too, and the question is asked twice: two
-   * conversations, two orchestrator jobs. The stash therefore has to be gone
-   * before the claim goes out, not after it comes back.
+   * Two tabs, one question. The stash lives in `localStorage` and is shared by
+   * every tab of this browser, so it is consumed before the claim goes out
+   * rather than after it returns — a second tab must not find a question sitting
+   * there looking unclaimed.
    */
   it('clears the stash before the claim goes out, not after it returns', async () => {
-    const id = stashQuestion('One tab only');
+    stashQuestion('One tab only');
     const claim = deferred<{ id: string; text: string }>();
     mockedRequest.post.mockReturnValue(claim.promise);
 
     renderHandoff();
 
-    await waitFor(() => expect(linkCalls()).toHaveLength(1));
+    await waitFor(() => expect(claimCalls()).toHaveLength(1));
     expect(readStash()).toBeNull();
 
-    claim.resolve({ id, text: 'One tab only' });
+    claim.resolve({ id: 'q-1', text: 'One tab only' });
     await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(1));
+  });
+
+  /**
+   * A `ChatForm` remount — a conversation switch, a route change — while the
+   * claim is still in flight must not fire a second one. The cookie is spent by
+   * whichever claim lands first, so the second would come back 404 and the
+   * question would be dropped by the very code meant to deliver it.
+   */
+  it('does not claim twice when the chat form remounts mid-claim', async () => {
+    stashQuestion('Only claimed once');
+    const claim = deferred<{ id: string; text: string }>();
+    mockedRequest.post.mockReturnValue(claim.promise);
+
+    const first = renderHandoff();
+    await waitFor(() => expect(claimCalls()).toHaveLength(1));
+
+    first.unmount();
+    renderHandoff();
+    await settle();
+
+    expect(claimCalls()).toHaveLength(1);
   });
 
   /**
    * Everything below covers the same hazard from different angles: the claim is a
    * round trip, and what was true when it left is not necessarily true when it
    * comes back. In every one of these the question must survive — a handoff that
-   * cannot be delivered has to be put back, not consumed.
+   * cannot be delivered has to be held, not consumed. It cannot be re-claimed:
+   * the cookie was spent by the claim that succeeded, so the copy the hook is
+   * holding is the only one left.
    */
   describe('when the chat changes while the claim is in flight', () => {
     it('does not submit into a conversation the user opened meanwhile', async () => {
-      const id = stashQuestion('Belongs in a fresh conversation');
+      stashQuestion('Belongs in a fresh conversation');
       const claim = deferred<{ id: string; text: string }>();
       mockedRequest.post.mockReturnValue(claim.promise);
 
       const view = renderHandoff();
-      await waitFor(() => expect(linkCalls()).toHaveLength(1));
+      await waitFor(() => expect(claimCalls()).toHaveLength(1));
 
       /* Sidebar click: the open conversation is no longer the new one. */
       mockConversation = { conversationId: 'OLD-CONVO-123', endpoint: 'ai-aflat' };
       view.rerender();
 
-      claim.resolve({ id, text: 'Belongs in a fresh conversation' });
+      claim.resolve({ id: 'q-1', text: 'Belongs in a fresh conversation' });
       await waitFor(() => expect(readStash()).not.toBeNull());
       expect(mockSubmitMessage).not.toHaveBeenCalled();
     });
@@ -306,48 +404,53 @@ describe('usePostLoginHandoff', () => {
      * to retry from.
      */
     it('does not submit while the user has a message of their own in flight', async () => {
-      const id = stashQuestion('Parked question');
+      stashQuestion('Parked question');
       const claim = deferred<{ id: string; text: string }>();
       mockedRequest.post.mockReturnValue(claim.promise);
 
       const view = renderHandoff();
-      await waitFor(() => expect(linkCalls()).toHaveLength(1));
+      await waitFor(() => expect(claimCalls()).toHaveLength(1));
 
       mockIsSubmitting = true;
       view.rerender();
 
-      claim.resolve({ id, text: 'Parked question' });
+      claim.resolve({ id: 'q-1', text: 'Parked question' });
       await waitFor(() => expect(readStash()).not.toBeNull());
       expect(mockSubmitMessage).not.toHaveBeenCalled();
     });
 
-    it('does not submit through a chat form that has gone away, and lets a later mount retry', async () => {
-      const id = stashQuestion('Still owed an answer');
+    /**
+     * A jump to /search or /prompts unmounts the composer. The question was
+     * already claimed by then, so the later mount must ask it *without* a second
+     * claim — the cookie is gone and the server would answer 404.
+     */
+    it('does not submit through a chat form that has gone away, and asks on the next mount', async () => {
+      stashQuestion('Still owed an answer');
       const claim = deferred<{ id: string; text: string }>();
       mockedRequest.post.mockReturnValue(claim.promise);
 
       const view = renderHandoff();
-      await waitFor(() => expect(linkCalls()).toHaveLength(1));
+      await waitFor(() => expect(claimCalls()).toHaveLength(1));
 
-      /* A jump to /search or /prompts unmounts the composer. */
       view.unmount();
 
-      claim.resolve({ id, text: 'Still owed an answer' });
+      claim.resolve({ id: 'q-1', text: 'Still owed an answer' });
       await waitFor(() => expect(readStash()).not.toBeNull());
       expect(mockSubmitMessage).not.toHaveBeenCalled();
 
-      mockedRequest.post.mockResolvedValue({ id, text: 'Still owed an answer' });
+      mockedRequest.post.mockRejectedValue(axiosError(404));
       renderHandoff();
 
       await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(1));
       expect(mockSubmitMessage).toHaveBeenCalledWith({ text: 'Still owed an answer' });
+      expect(claimCalls()).toHaveLength(1);
       expect(readStash()).toBeNull();
     });
 
     /** `ask` refusing to append to a preliminary assistant message is not a delivery. */
-    it('puts the question back when the submit is refused', async () => {
-      const id = stashQuestion('Refused once');
-      mockedRequest.post.mockResolvedValue({ id, text: 'Refused once' });
+    it('holds the question when the submit is refused', async () => {
+      stashQuestion('Refused once');
+      mockedRequest.post.mockResolvedValue({ id: 'q-1', text: 'Refused once' });
       mockSubmitMessage.mockReturnValueOnce(false);
 
       const first = renderHandoff();
@@ -355,48 +458,11 @@ describe('usePostLoginHandoff', () => {
       await waitFor(() => expect(readStash()).not.toBeNull());
       first.unmount();
 
+      mockedRequest.post.mockRejectedValue(axiosError(404));
       renderHandoff();
       await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(2));
+      expect(claimCalls()).toHaveLength(1);
       expect(readStash()).toBeNull();
     });
-  });
-
-  /**
-   * The stash is cleared before the claim goes out, which is what normally stops
-   * a second mount (or a second tab) from claiming the same id. On a browser with
-   * site data blocked, `removeItem` throws, `clearStash` swallows it by contract,
-   * and the stash survives the whole claim — leaving the module-level
-   * `handledIds` set as the only thing standing between one question and two
-   * conversations. Remove the `handledIds` check and this case claims twice.
-   */
-  it('does not re-claim the same question when the stash refuses to clear', async () => {
-    const id = stashQuestion('Blocked storage');
-    const claim = deferred<{ id: string; text: string }>();
-    mockedRequest.post.mockReturnValue(claim.promise);
-
-    const realRemoveItem = Storage.prototype.removeItem;
-    Storage.prototype.removeItem = jest.fn(() => {
-      throw new DOMException('SecurityError');
-    });
-
-    try {
-      const first = renderHandoff();
-      await waitFor(() => expect(linkCalls()).toHaveLength(1));
-      /* The clear was refused, so the question is still sitting there. */
-      expect(readStash()).not.toBeNull();
-
-      /* A conversation switch remounts ChatForm; the new instance has fresh refs. */
-      first.unmount();
-      renderHandoff();
-      await settle();
-
-      expect(linkCalls()).toHaveLength(1);
-
-      claim.resolve({ id, text: 'Blocked storage' });
-      await settle();
-      expect(mockSubmitMessage).not.toHaveBeenCalled();
-    } finally {
-      Storage.prototype.removeItem = realRemoveItem;
-    }
   });
 });

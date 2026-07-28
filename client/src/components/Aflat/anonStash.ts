@@ -3,10 +3,17 @@
  *
  * Two independent pieces of state, both deliberately in `localStorage` so they
  * survive the round trip through the identity provider:
- *  - the parked question (`aflat_anon_q`), read back after signup so the new
- *    account can claim it;
+ *  - the parked question (`aflat_anon_q`), kept so the app can show the visitor
+ *    their own question back;
  *  - the acknowledgement of the legal-information framing (`ACK_KEY`), whose
  *    name carries the wording version so a copy change re-asks.
+ *
+ * The stash is **display state, not a credential.** Authorisation to read a
+ * parked question back lives entirely in the `aflat_claim` httpOnly cookie the
+ * server sets when the question is parked: `id` is never sent anywhere and
+ * proves nothing, and a visitor who hand-edits this key gains no access to
+ * anyone's question — the worst they can do is change the text shown to
+ * themselves before the server's own copy replaces it.
  */
 const STASH_KEY = 'aflat_anon_q';
 
@@ -22,22 +29,34 @@ export const ACK_KEY = `aflat_ack_${ACK_VERSION}`;
  * them text they never wrote and stamping `anon_questions.linkedUserId` with
  * the wrong subject. A day is long enough for "sign up, confirm the email, come
  * back", short enough that the browser is still the same person's.
+ *
+ * The claim cookie is given the same 24h lifetime server-side, so both halves
+ * of the handoff expire together.
  */
 export const STASH_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-export type AnonStash = { id: string; text: string; ts?: number };
+/**
+ * `id` is retained for continuity (it is what `/ask` gets back when it parks the
+ * question, and it makes a stash entry legible in a debugging session) but it is
+ * inert: nothing reads it as authorisation and it is never put in a request. It
+ * is optional because the post-login handoff can learn a question's text from
+ * the claim response on a browser where `/ask` could not write here at all.
+ */
+export type AnonStash = { id?: string; text: string; ts?: number };
 
 /**
  * Returns false instead of throwing when storage is unavailable (all site data
  * blocked, quota exceeded). Callers must treat that as non-fatal: by the time
- * this runs the question is already parked server-side, and losing the stash
- * only costs the post-signup auto-link, which Task 8 handles as optional.
+ * this runs the question is already parked server-side and the claim cookie is
+ * already set, so a failed stash costs nothing but the local display copy —
+ * the post-signup handoff runs off the cookie either way.
  * Throwing here would surface a "couldn't save your question" error after a
  * 201 and invite retries that orphan a document each time.
  *
- * `ts` is stamped on write unless the caller supplies one: the post-login claim
- * re-parks a question it could not deliver, and re-parking must not restart the
- * expiry clock — that would let a stash outlive the visit it belongs to.
+ * `ts` is stamped on write unless the caller supplies one: the post-login
+ * handoff re-parks a question it could not deliver, and re-parking must not
+ * restart the expiry clock — that would let a stash outlive the visit it
+ * belongs to.
  */
 export const saveStash = (q: AnonStash): boolean => {
   try {
