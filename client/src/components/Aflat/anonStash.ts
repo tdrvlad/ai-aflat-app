@@ -58,6 +58,16 @@ export type AnonStash = {
    * already type whatever they like into the composer.
    */
   claimed?: boolean;
+  /**
+   * The account a `claimed` question was confirmed to belong to, written only
+   * beside that flag. Direct delivery skips the server, so this is the only
+   * thing left that can tell the owner from the next person to sign in on a
+   * shared browser — where the question is already stamped with the *first*
+   * account's id server-side, and would be shown to, and stored under, the
+   * second. It grants nothing either: forging it buys exactly what typing into
+   * the composer buys.
+   */
+  uid?: string;
 };
 
 /**
@@ -83,6 +93,7 @@ export const saveStash = (q: AnonStash): boolean => {
         text: q.text,
         ts: q.ts ?? Date.now(),
         ...(q.claimed === true ? { claimed: true } : {}),
+        ...(q.uid != null ? { uid: q.uid } : {}),
       }),
     );
     return true;

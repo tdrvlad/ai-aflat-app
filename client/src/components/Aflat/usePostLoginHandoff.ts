@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Constants, apiBaseUrl, request } from 'librechat-data-provider';
 import { useChatContext } from '~/Providers/ChatContext';
+import { useAuthContext } from '~/hooks/AuthContext';
 import useSubmitMessage from '~/hooks/Messages/useSubmitMessage';
 import { useConsentStatus } from './consent';
 import { clearStash, readStash, saveStash } from './anonStash';
@@ -27,8 +28,15 @@ import { clearStash, readStash, saveStash } from './anonStash';
 /** Backend contract for `POST /api/aflat/anon-questions/claim`. */
 type ClaimedQuestion = { id?: string; text?: string };
 
-/** A claimed question waiting for a place to be asked. */
-type PendingQuestion = { text: string; id?: string; ts?: number };
+/**
+ * A claimed question waiting for a place to be asked.
+ *
+ * `uid` is the account the server confirmed it belongs to. It is carried because
+ * a question in this state is delivered *without* going back to the server — the
+ * credential is spent — so this is the only thing left that can tell whether the
+ * person now at the keyboard is the one it was claimed for.
+ */
+type PendingQuestion = { text: string; id?: string; ts?: number; uid?: string };
 
 const claimUrl = () => `${apiBaseUrl()}/api/aflat/anon-questions/claim`;
 
@@ -74,6 +82,9 @@ const usableText = (value: unknown): string | null =>
  */
 const CLAIM_MARKER_COOKIE = 'aflat_claim_present';
 
+/** The server's own claim window — see `CLAIM_MAX_AGE_MS` in `anonQuestions.js`. */
+const CLAIM_MARKER_MAX_AGE_S = 24 * 60 * 60;
+
 const hasClaimMarker = (): boolean => {
   try {
     return document.cookie
@@ -105,10 +116,21 @@ const spendClaimMarker = () => {
   }
 };
 
-/** Put back after a failure that leaves the question still claimable. */
+/**
+ * Put back after a failure that leaves the question still claimable — and only
+ * if it was there to begin with, or a browser that only ever had a stash would
+ * gain a marker the server never set and spend a claim slot on the next load
+ * being told 404.
+ *
+ * Written with the server's attributes rather than as a bare `name=value`: that
+ * would be a *session* cookie where the server's lives 24h, so the one browser
+ * this restore exists for — `localStorage` blocked, marker the only record that
+ * anything was parked — would lose it again at the next browser restart.
+ */
 const restoreClaimMarker = () => {
   try {
-    document.cookie = `${CLAIM_MARKER_COOKIE}=1; path=/`;
+    const secure = window.location.protocol === 'https:' ? '; secure' : '';
+    document.cookie = `${CLAIM_MARKER_COOKIE}=1; path=/; max-age=${CLAIM_MARKER_MAX_AGE_S}; samesite=lax${secure}`;
   } catch {
     /* The stash is the other signal; losing this one only costs a retry. */
   }
@@ -116,8 +138,11 @@ const restoreClaimMarker = () => {
 
 export default function usePostLoginHandoff() {
   const { data: consent } = useConsentStatus();
+  const { user } = useAuthContext();
   const { conversation, isSubmitting } = useChatContext();
   const { submitMessage } = useSubmitMessage();
+
+  const uid = user?.id;
 
   /**
    * `submitMessage` is a new function on most renders; keeping it in a ref stops
@@ -129,9 +154,12 @@ export default function usePostLoginHandoff() {
   const startedRef = useRef(false);
 
   /**
-   * Three conditions, all load-bearing:
+   * Four conditions, all load-bearing:
    *  - consent recorded — nothing may be sent on the user's behalf before they
    *    have accepted the framing (the modal blocks until then);
+   *  - the account is known — a claimed question is delivered to its owner and
+   *    to nobody else, and until the user query lands there is nothing to check
+   *    that against. Waiting costs a render; guessing costs the guard;
    *  - the conversation is the *new* one — the question belongs in a fresh
    *    conversation, never appended to whatever the user happens to have open;
    *  - the conversation has an endpoint — `ChatRoute` applies the default
@@ -140,6 +168,7 @@ export default function usePostLoginHandoff() {
    */
   const ready =
     consent?.recorded === true &&
+    uid != null &&
     conversation?.conversationId === Constants.NEW_CONVO &&
     conversation?.endpoint != null;
 
@@ -155,6 +184,13 @@ export default function usePostLoginHandoff() {
   readyRef.current = ready;
   const conversationIdRef = useRef(conversation?.conversationId);
   conversationIdRef.current = conversation?.conversationId;
+  /**
+   * A sign-out and a sign-in can both happen inside one page context. The claim
+   * was authorised for whoever was signed in when it left, so a message must
+   * never land in the session of whoever is signed in when it returns.
+   */
+  const uidRef = useRef(uid);
+  uidRef.current = uid;
   /**
    * `ask` silently no-ops while a submission is in flight, and `submitMessage`
    * reports that the same way it reports success, so this has to be checked
@@ -188,11 +224,13 @@ export default function usePostLoginHandoff() {
 
     const state = handoffState();
     const startedInConversationId = conversationIdRef.current;
+    const startedAsUid = uid;
 
     /** Everything the question needs to still be a *deliverable* question. */
     const deliverable = () =>
       mountedRef.current &&
       readyRef.current &&
+      uidRef.current === startedAsUid &&
       conversationIdRef.current === startedInConversationId &&
       isSubmittingRef.current !== true;
 
@@ -206,7 +244,7 @@ export default function usePostLoginHandoff() {
     const stashed: PendingQuestion | null =
       stash == null || usableText(stash.text) == null
         ? null
-        : { text: stash.text, id: stash.id, ts: stash.ts };
+        : { text: stash.text, id: stash.id, ts: stash.ts, uid: stash.uid };
 
     /**
      * A question already confirmed as this account's that could not be asked yet
@@ -218,21 +256,54 @@ export default function usePostLoginHandoff() {
      * survive a hard reload, which page state cannot. Without the flag, a reload
      * in this window sent the hook back to the server, got the 404 a spent
      * credential earns, and dropped a question that was sitting in localStorage.
+     *
+     * Skipping the server is exactly why the owner has to be checked here. That
+     * 404 used to be the backstop: a leftover copy offered to the next account
+     * simply got refused. Delivering it locally removes that, and on a shared
+     * browser — one sign-out, one sign-in, inside the 24h window — it would open
+     * a stranger's first conversation with a question already bound to someone
+     * else's account. Anything not provably this account's falls through to the
+     * normal claim, which answers 404 and drops it.
      */
+    const ownedByUser = (owner?: string) => owner != null && owner === uid;
+
+    const claimedStash: PendingQuestion | null =
+      stash?.claimed === true && stashed != null && ownedByUser(stashed.uid) ? stashed : null;
+
     const pending: PendingQuestion | null =
-      state.undelivered ?? (stash?.claimed === true && stashed != null ? stashed : null);
+      state.undelivered != null && ownedByUser(state.undelivered.uid)
+        ? state.undelivered
+        : claimedStash;
+
+    /**
+     * Keep a question that is ours but could not be asked. Both records are
+     * written: page state, which is fast and dies with the page, and the stash
+     * flagged `claimed`, which survives a reload. `ts` is taken once and then
+     * carried, so a run of failed deliveries cannot roll the 24h window forward
+     * a step at a time and outlive the visit it belongs to.
+     */
+    const hold = (question: PendingQuestion) => {
+      const held: PendingQuestion = { ...question, ts: question.ts ?? Date.now(), uid };
+      state.undelivered = held;
+      saveStash({ ...held, claimed: true });
+      startedRef.current = false;
+    };
 
     if (pending != null) {
       startedRef.current = true;
+      /**
+       * Consumed before the submit, not after it: `localStorage` is shared by
+       * every tab of this browser, and a second page context that finds a
+       * `claimed` question still sitting there delivers it too. Same discipline
+       * as the claim path below, for the same reason.
+       */
+      clearStash();
       if (!deliverable() || submitRef.current({ text: pending.text }) === false) {
         /* Still ours, still unasked — keep both records of that for a later mount. */
-        state.undelivered = pending;
-        saveStash({ ...pending, claimed: true });
-        startedRef.current = false;
+        hold(pending);
         return;
       }
       state.undelivered = null;
-      clearStash();
       return;
     }
 
@@ -246,7 +317,8 @@ export default function usePostLoginHandoff() {
      * neither, this account parked nothing and the claim would only burn a
      * shared rate-limit slot to be told so.
      */
-    if (!hasClaimMarker() && stashed == null) {
+    const markerPresent = hasClaimMarker();
+    if (!markerPresent && stashed == null) {
       return;
     }
 
@@ -272,6 +344,12 @@ export default function usePostLoginHandoff() {
        * both would succeed and the question would be asked twice. The server
        * clears its copies as well, but only once the response lands, which is
        * far too late to be the guard.
+       *
+       * The accepted cost: between here and the response, this browser holds no
+       * record that anything was parked, so a tab closed mid-claim loses the
+       * question even though the credential is still valid for 24h. That is the
+       * deliberate trade for closing the duplicate-ask window, and it is the
+       * rarer of the two — a page has to die inside one request.
        */
       spendClaimMarker();
       clearStash();
@@ -297,7 +375,9 @@ export default function usePostLoginHandoff() {
          * them already works.
          */
         state.claimStarted = false;
-        restoreClaimMarker();
+        if (markerPresent) {
+          restoreClaimMarker();
+        }
         if (stashed != null) {
           park(stashed);
         } else {
@@ -315,6 +395,7 @@ export default function usePostLoginHandoff() {
         text,
         id: typeof claimed?.id === 'string' ? claimed.id : stashed?.id,
         ts: stashed?.ts,
+        uid,
       };
 
       /**
@@ -329,10 +410,14 @@ export default function usePostLoginHandoff() {
        * the two that survives a reload. A re-claim would now 404.
        */
       if (!deliverable() || submitRef.current({ text }) === false) {
-        state.undelivered = question;
-        saveStash({ ...question, claimed: true });
-        startedRef.current = false;
+        hold(question);
       }
     })();
-  }, [ready]);
+    /**
+     * `uid` belongs here as well as in `ready`: it is read directly inside the
+     * effect, and a sign-in that replaces the account is a reason to look again
+     * — the per-instance and page-context guards decide whether anything comes
+     * of it.
+     */
+  }, [ready, uid]);
 }

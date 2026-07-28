@@ -389,9 +389,14 @@ describe('POST /api/aflat/anon-questions/claim', () => {
    * `express-mongo-sanitize`: that middleware runs before `cookieParser` and so
    * never sees `req.cookies`, while cookie-parser's `JSONCookies` turns a `j:`
    * prefixed value into a real object. A cookie of `j:{"$gt":""}` therefore
-   * arrives as a Mongo operator, and only the string check in front of the hash
-   * stops it from becoming one — "match any document with a claim hash", which
-   * would hand back a stranger's question.
+   * arrives as a Mongo operator, and the string check in front of the hash is
+   * what turns it into the 404 every other unusable cookie gets.
+   *
+   * Removing that check does not currently reach the query — `createHash().update()`
+   * throws on an object, so the route 500s — but that is incidental, not a
+   * guarantee: it depends on a hashing implementation refusing non-strings. This
+   * pins the contract instead. What it must never become is a `$gt` in the
+   * filter: "any document with a claim hash", i.e. a stranger's question.
    */
   it('rejects a JSON cookie that would smuggle a Mongo operator into the query', async () => {
     const { id } = await park();

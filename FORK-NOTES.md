@@ -415,6 +415,27 @@ Rule: every deviation from upstream = one line here, same commit.
     away text that was sitting in `localStorage`. Page state is the fast path; this flag is the part
     that survives a reload. It is not a credential and grants nothing: anyone who can set it can
     already type whatever they like into the composer.
+- **`AnonStash.uid` and the account-known gate (Task 6/7/8 hardening, second fix round, committed):**
+  the `claimed` flag above deliberately delivers without asking the server, which removed the
+  backstop that flag inherited: the 404 a spent credential earns was what stopped a leftover local
+  copy from reaching the *next* account on a shared browser. Nothing clears the stash on logout, so
+  within the 24h window — user X claims, delivery fails, X signs out, Y signs in — Y's first
+  conversation would open with X's question, already stamped `linkedUserId: X` server-side and now
+  stored under Y. The record therefore carries the account it was claimed for (`uid`, written only
+  beside `claimed`), and direct delivery requires a match; anything else falls through to the normal
+  claim, which 404s and drops it. `usePostLoginHandoff` reads `useAuthContext().user.id` for this and
+  will not act at all until the account is known — a question held with no owner could never be
+  matched by any later mount. `uid` grants nothing: forging it buys what typing into the composer
+  buys. Also in this round: the `claimed` stash is consumed *before* the submit (same discipline as
+  the claim path — `localStorage` is shared by every tab); the marker is restored only if it was
+  present to begin with, and with the server's own attributes, since a bare `name=value` is a session
+  cookie that a browser restart would drop on precisely the storage-blocked browser it exists for;
+  and a held question keeps one `ts` across repeated failed deliveries instead of rolling the 24h
+  window forward a step at a time.
+  - Accepted cost, recorded deliberately: between spending both signals and the response landing,
+    the browser holds no record that anything was parked, so a tab that dies mid-claim loses the
+    question even though the credential stays valid. That is the trade for closing the duplicate-ask
+    window, and it needs a page to die inside one request.
 
 ## Local dev environment notes (not upstream deviations, but needed to boot)
 - Node/npm: repo pins Node `24.16.0` (`.nvmrc`) and `npm@11.13.0` (`packageManager` in

@@ -37,6 +37,13 @@ jest.mock('~/hooks/Messages/useSubmitMessage', () => ({
   default: () => ({ submitMessage: mockSubmitMessage, submitPrompt: jest.fn() }),
 }));
 
+/** Only `user.id` is read, and only to decide whose question this is. */
+let mockUser: { id: string } | null = null;
+jest.mock('~/hooks/AuthContext', () => ({
+  __esModule: true,
+  useAuthContext: () => ({ user: mockUser }),
+}));
+
 /** Loosely typed: custom endpoints are plain strings at runtime. */
 let mockConversation: { conversationId?: string; endpoint?: string } | null = null;
 let mockIsSubmitting = false;
@@ -128,6 +135,7 @@ describe('usePostLoginHandoff', () => {
     mockedRequest.post.mockResolvedValue({ id: 'q-1', text: 'server text' });
     mockConversation = { conversationId: 'new', endpoint: 'ai-aflat' };
     mockIsSubmitting = false;
+    mockUser = { id: 'user-1' };
   });
 
   /**
@@ -199,7 +207,12 @@ describe('usePostLoginHandoff', () => {
    */
   it('asks a claimed-but-undelivered question after a hard reload, without re-claiming', async () => {
     /* Delivery failed once: chat had moved on, question written back as ours. */
-    saveStash({ id: 'q-1', text: 'Pot fi concediat în concediu medical?', claimed: true });
+    saveStash({
+      id: 'q-1',
+      text: 'Pot fi concediat în concediu medical?',
+      claimed: true,
+      uid: 'user-1',
+    });
     clearClaimMarker();
     /* A hard reload: page-context state is gone, storage is not. */
     delete (window as Window & { __aflatHandoff?: unknown }).__aflatHandoff;
@@ -212,6 +225,104 @@ describe('usePostLoginHandoff', () => {
     });
     expect(claimCalls()).toHaveLength(0);
     expect(localStorage.getItem('aflat_anon_q')).toBeNull();
+  });
+
+  /**
+   * The shared-browser case, on the one path that never asks the server. A
+   * claimed question is already stamped with its owner's id server-side; the
+   * 404 a spent credential earns used to be what stopped a leftover local copy
+   * from reaching the next account. Delivering locally removed that backstop, so
+   * the record carries its owner and anything else falls through to the claim.
+   */
+  it('never delivers a claimed question to a different account', async () => {
+    saveStash({
+      id: 'q-1',
+      text: 'Pot fi concediat în concediu medical?',
+      claimed: true,
+      uid: 'user-1',
+    });
+    clearClaimMarker();
+    /* User 1 signed out; user 2 signed in on the same browser, same day. */
+    delete (window as Window & { __aflatHandoff?: unknown }).__aflatHandoff;
+    mockUser = { id: 'user-2' };
+    mockedRequest.post.mockRejectedValue(axiosError(404));
+
+    renderHandoff();
+    await settle();
+
+    expect(mockSubmitMessage).not.toHaveBeenCalled();
+    expect(readStash()).toBeNull();
+  });
+
+  /**
+   * The `claimed` copy lives in `localStorage`, which every tab of this browser
+   * shares, so it is consumed before the submit rather than after it — otherwise
+   * a second page context finds a question that still looks undelivered and asks
+   * it again. Same reasoning as the claim path, one step further along.
+   */
+  it('consumes the shared stash before delivering a claimed question', async () => {
+    saveStash({ id: 'q-1', text: 'O singură livrare', claimed: true, uid: 'user-1' });
+    clearClaimMarker();
+    delete (window as Window & { __aflatHandoff?: unknown }).__aflatHandoff;
+
+    let stashDuringSubmit: unknown = 'submit was never called';
+    mockSubmitMessage.mockImplementation(() => {
+      stashDuringSubmit = readStash();
+      return true;
+    });
+
+    renderHandoff();
+
+    await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(1));
+    expect(stashDuringSubmit).toBeNull();
+  });
+
+  /**
+   * The marker says "the server parked something for this browser". Putting one
+   * back that was never there turns a browser with only a stale stash into one
+   * that spends a claim slot on every load to be told 404 — against a 10/h/IP
+   * budget shared behind carrier NAT.
+   */
+  it('does not invent a claim marker the server never set', async () => {
+    clearClaimMarker();
+    stashQuestion('Retry me');
+    mockedRequest.post.mockRejectedValue(axiosError(429));
+
+    renderHandoff();
+
+    await waitFor(() => expect(claimCalls()).toHaveLength(1));
+    await waitFor(() => expect(readStash()).not.toBeNull());
+    expect(document.cookie).not.toContain(MARKER);
+  });
+
+  /**
+   * Re-parking must not restart the 24h clock — that is what keeps a stash from
+   * outliving the visit it belongs to on a shared machine. A question claimed on
+   * a browser that had no stash to begin with is stamped once, when it is first
+   * held, and every later failed delivery has to carry that same stamp.
+   */
+  it('keeps one clock across repeated failed deliveries', async () => {
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    try {
+      localStorage.clear();
+      mockedRequest.post.mockResolvedValue({ id: 'q-1', text: 'Ținut pe loc' });
+      mockSubmitMessage.mockReturnValue(false);
+
+      const first = renderHandoff();
+      await waitFor(() => expect(readStash()).not.toBeNull());
+      const firstTs = readStash()?.ts;
+      expect(firstTs).toBe(1_700_000_000_000);
+      first.unmount();
+
+      nowSpy.mockReturnValue(1_700_000_000_000 + 60_000);
+      renderHandoff();
+
+      await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(2));
+      expect(readStash()?.ts).toBe(firstTs);
+      expect(claimCalls()).toHaveLength(1);
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   /** A stale marker the server has not cleared yet still gets one attempt. */
@@ -255,6 +366,24 @@ describe('usePostLoginHandoff', () => {
   it('submits nothing while consent is not recorded', async () => {
     stashQuestion();
     renderHandoff({ recorded: false });
+    await settle();
+
+    expect(claimCalls()).toHaveLength(0);
+    expect(mockSubmitMessage).not.toHaveBeenCalled();
+    expect(readStash()).not.toBeNull();
+  });
+
+  /**
+   * The account arrives on its own query, and everything here is decided against
+   * it: whose question this is, and whose it stays if delivery fails. Acting
+   * before it lands would stamp a held question with no owner at all, which no
+   * later mount could ever match.
+   */
+  it('waits until it knows which account is signed in', async () => {
+    stashQuestion();
+    mockUser = null;
+
+    renderHandoff();
     await settle();
 
     expect(claimCalls()).toHaveLength(0);
