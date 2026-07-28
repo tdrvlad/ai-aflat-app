@@ -478,3 +478,14 @@ Rule: every deviation from upstream = one line here, same commit.
   failed`, `[indexSync] error fetch failed`, `Config file YAML format is invalid: ENOENT
   ... librechat.yaml`, `RAG API is either not running or not reachable`, default
   CREDS_KEY/CREDS_IV/JWT_SECRET/JWT_REFRESH_SECRET warnings.
+
+- **Partial TTL index on `anon_questions` (Task 10, committed):**
+  `packages/data-schemas/src/schema/anonQuestion.ts` gained
+  `index({ createdAt: 1 }, { name: 'anon_questions_unclaimed_ttl', expireAfterSeconds: 63072000,
+  partialFilterExpression: { linkedUserId: null } })`. Unclaimed questions — free text belonging
+  to no account, so no subject can ever ask for, correct, or erase it — now expire after 24
+  months; a claimed question leaves the partial index the moment `linkedUserId` is set and is
+  never a TTL candidate. This replaces the phase-1 plan's `retention.sh` cron: an index that
+  ships with the schema survives a rebuild or a restore into an empty database, which a
+  hand-typed `createIndex` on the server does not. Verified against MongoDB 8.0.20 (partial +
+  TTL accepted; the filter selects null-valued *and* field-absent documents).
