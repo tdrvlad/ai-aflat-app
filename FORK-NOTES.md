@@ -518,3 +518,15 @@ Rule: every deviation from upstream = one line here, same commit.
     `app.ai-aflat.ro` serves real users, the Art. 13 notice must also cover the app —
     fold it into `docs/superpowers/specs/2026-07-28-consent-wording-v2.md` rather than
     editing the page twice.
+
+- **`librechat.yaml` collection gate (Task 10, committed):** added a top-level `registration:`
+  block with `allowedDomains: ['sapio.ro']`. Production may not take a question from the public
+  while the code still carries the v1 consent/ack wording (`v1-2026-07`), and the flag that looks
+  like it should do this — `ALLOW_SOCIAL_REGISTRATION=false` — does **not**: it is read only by
+  `api/strategies/socialLogin.js:78`, while the Clerk path is `api/strategies/openidStrategy.js`,
+  which calls `createUser` (line 699) with no such check. What does gate it is
+  `isEmailDomainAllowed(email, baseConfig?.registration?.allowedDomains)` at `openidStrategy.js:583`,
+  which runs *before* `findOpenIDUser` and therefore blocks new and existing users alike. Paired
+  with `AFLAT_ANON_QUESTION_MAX=0` in the server env for the anonymous path. Remove this block (and
+  set that var back to 5) when the v2 wording ships — see `.claude/tasks/task10-deploy-runbook.md`
+  in the parent repo.

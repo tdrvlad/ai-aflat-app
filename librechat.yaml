@@ -4,6 +4,31 @@
 version: 1.3.13
 cache: true
 
+# ┌─ COLLECTION GATE (Task 10 deploy) ────────────────────────────────────────┐
+# │ Consent wording v2 is approved but not yet in the code, so production may  │
+# │ not take a question from the public under the v1 wording that IS in the     │
+# │ code (`CONSENT_WORDING_VERSION`/`ACK_VERSION` = 'v1-2026-07').              │
+# │                                                                            │
+# │ This is the gate for the AUTHENTICATED path. `isEmailDomainAllowed` runs in │
+# │ `api/strategies/openidStrategy.js` BEFORE the user is even looked up, so an │
+# │ allowlist here blocks every Clerk sign-in whose email domain is not listed  │
+# │ — new accounts and existing ones alike. Nobody outside sapio.ro can reach   │
+# │ the composer, the v1 ConsentModal, or write a message document. The sign-in │
+# │ flow itself still runs all the way to Clerk and back, so the operator can   │
+# │ walk it end to end.                                                        │
+# │                                                                            │
+# │ The ANONYMOUS path is gated separately by `AFLAT_ANON_QUESTION_MAX=0` in    │
+# │ the server's .env — see .claude/tasks/task10-deploy-runbook.md.            │
+# │                                                                            │
+# │ TO OPEN THE PRODUCT TO THE PUBLIC: apply the v2 wording, bump both version  │
+# │ constants, then delete this whole `registration:` block and set             │
+# │ AFLAT_ANON_QUESTION_MAX=5. Both are one-line changes; neither needs a       │
+# │ rebuild (this file is read at boot, that one at limiter construction).      │
+# └────────────────────────────────────────────────────────────────────────────┘
+registration:
+  allowedDomains:
+    - 'sapio.ro'
+
 interface:
   customWelcome: 'Întreabă despre legislația din România. Răspunsurile vin cu sursa lângă ele.'
   privacyPolicy:
