@@ -16,7 +16,22 @@ export const ACK_KEY = `aflat_ack_${ACK_VERSION}`;
 
 export type AnonStash = { id: string; text: string };
 
-export const saveStash = (q: AnonStash) => localStorage.setItem(STASH_KEY, JSON.stringify(q));
+/**
+ * Returns false instead of throwing when storage is unavailable (all site data
+ * blocked, quota exceeded). Callers must treat that as non-fatal: by the time
+ * this runs the question is already parked server-side, and losing the stash
+ * only costs the post-signup auto-link, which Task 8 handles as optional.
+ * Throwing here would surface a "couldn't save your question" error after a
+ * 201 and invite retries that orphan a document each time.
+ */
+export const saveStash = (q: AnonStash): boolean => {
+  try {
+    localStorage.setItem(STASH_KEY, JSON.stringify(q));
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 export const readStash = (): AnonStash | null => {
   try {
@@ -26,7 +41,13 @@ export const readStash = (): AnonStash | null => {
   }
 };
 
-export const clearStash = () => localStorage.removeItem(STASH_KEY);
+export const clearStash = () => {
+  try {
+    localStorage.removeItem(STASH_KEY);
+  } catch {
+    /* same reasoning as saveStash — never block the caller's flow */
+  }
+};
 
 /** True once the visitor has acknowledged the current framing wording. */
 export const hasAcked = (): boolean => {

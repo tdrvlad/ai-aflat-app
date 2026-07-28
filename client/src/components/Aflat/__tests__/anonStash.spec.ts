@@ -62,4 +62,45 @@ describe('anonStash', () => {
     localStorage.setItem('aflat_ack_v0-2026-01', new Date().toISOString());
     expect(hasAcked()).toBe(false);
   });
+
+  it('reports a successful stash on a healthy store', () => {
+    expect(saveStash({ id: 'abc123', text: 'x' })).toBe(true);
+  });
+
+  /**
+   * Blocked or full storage must never propagate: `saveStash` runs *after* the
+   * question is already parked server-side, so a throw here would be reported
+   * to the visitor as a failed send and invite an orphan-producing retry.
+   */
+  describe('when localStorage throws (site data blocked / quota exceeded)', () => {
+    const realSetItem = Storage.prototype.setItem;
+    const realRemoveItem = Storage.prototype.removeItem;
+
+    beforeEach(() => {
+      Storage.prototype.setItem = jest.fn(() => {
+        throw new DOMException('QuotaExceededError');
+      });
+      Storage.prototype.removeItem = jest.fn(() => {
+        throw new DOMException('SecurityError');
+      });
+    });
+
+    afterEach(() => {
+      Storage.prototype.setItem = realSetItem;
+      Storage.prototype.removeItem = realRemoveItem;
+    });
+
+    it('saveStash reports failure instead of throwing', () => {
+      expect(() => saveStash({ id: 'abc123', text: 'x' })).not.toThrow();
+      expect(saveStash({ id: 'abc123', text: 'x' })).toBe(false);
+    });
+
+    it('clearStash swallows the failure', () => {
+      expect(() => clearStash()).not.toThrow();
+    });
+
+    it('saveAck swallows the failure', () => {
+      expect(() => saveAck()).not.toThrow();
+    });
+  });
 });

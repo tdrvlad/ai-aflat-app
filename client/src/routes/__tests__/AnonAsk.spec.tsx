@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { loginPage } from 'librechat-data-provider';
 import AnonAsk from '../AnonAsk';
 import { ACK_KEY } from '~/components/Aflat/anonStash';
 
@@ -43,6 +44,20 @@ describe('AnonAsk (/intreaba)', () => {
     expect(screen.getByRole('heading', { name: 'Ask about Romanian legislation' })).toBeVisible();
     expect(screen.getByText(/direct link to the article of law/i)).toBeVisible();
     expect(screen.getByRole('group', { name: 'Example questions' })).toBeVisible();
+  });
+
+  /**
+   * The gate is also where an account holder with an expired session lands, so
+   * sign-in has to be reachable without walking the ask flow. Pinned because
+   * losing it silently dead-ends every returning user.
+   */
+  it('offers an existing account holder a way to sign in', () => {
+    render(<AnonAsk />);
+
+    const link = screen.getByTestId('aflat-signin-link');
+    expect(link).toBeVisible();
+    expect(link).toHaveTextContent(/sign in/i);
+    expect(link).toHaveAttribute('href', loginPage());
   });
 
   it('fills the composer from a starter chip without sending it', () => {
@@ -110,6 +125,35 @@ describe('AnonAsk (/intreaba)', () => {
 
     await waitFor(() => expect(questionCalls()).toHaveLength(1));
     expect(screen.queryByTestId('aflat-ack-button')).not.toBeInTheDocument();
+  });
+
+  /**
+   * Past the 201 the question is already parked server-side, so a browser with
+   * site data blocked must still reach the gate. Reporting the failed stash as
+   * a failed send would invite a retry that orphans another document and burns
+   * the visitor's hourly budget.
+   */
+  it('still reaches the gate when localStorage is blocked', async () => {
+    localStorage.setItem(ACK_KEY, new Date().toISOString());
+    const realSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = jest.fn(() => {
+      throw new DOMException('SecurityError');
+    });
+
+    try {
+      render(<AnonAsk />);
+
+      typeQuestion('Ce drepturi am?');
+      fireEvent.click(screen.getByTestId('aflat-send-button'));
+
+      await waitFor(() => expect(questionCalls()).toHaveLength(1));
+      await waitFor(() => expect(screen.getByTestId('aflat-login-gate')).toBeVisible(), {
+        timeout: 3000,
+      });
+      expect(screen.queryByTestId('aflat-error')).not.toBeInTheDocument();
+    } finally {
+      Storage.prototype.setItem = realSetItem;
+    }
   });
 
   it('surfaces the throttle as a plain message and keeps the question', async () => {

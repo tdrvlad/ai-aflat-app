@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiBaseUrl } from 'librechat-data-provider';
+import { apiBaseUrl, loginPage } from 'librechat-data-provider';
 import { SendIcon, Spinner, TextareaAutosize, ThemeSelector } from '@librechat/client';
 import AckBar from '~/components/Aflat/AckBar';
 import StarterChips from '~/components/Aflat/StarterChips';
@@ -52,6 +52,8 @@ export default function AnonAsk() {
   const submit = useCallback(async (question: string) => {
     setIsSending(true);
     setErrorKey(null);
+
+    let id: string | null = null;
     try {
       const response = await fetch(`${apiBaseUrl()}/api/aflat/anon-questions`, {
         method: 'POST',
@@ -70,18 +72,34 @@ export default function AnonAsk() {
         return;
       }
 
-      const { id } = (await response.json()) as { id: string };
-      saveStash({ id, text: question });
-      setSentText(question);
-      setText('');
-      setState('asking');
-      timerRef.current = setTimeout(() => setState('gate'), ASKING_MS);
+      try {
+        const body = (await response.json()) as { id?: string };
+        id = typeof body.id === 'string' ? body.id : null;
+      } catch {
+        /* the question is saved; we just can't name it for the later claim */
+        id = null;
+      }
     } catch {
       setErrorKey('com_aflat_error_generic');
       setState('idle');
+      return;
     } finally {
       setIsSending(false);
     }
+
+    /**
+     * Past the 2xx the question IS parked server-side, so nothing below may
+     * route back to an error state. A failed stash costs only the post-signup
+     * auto-link; an error here would instead invite a retry that orphans
+     * another document and burns the visitor's 5/hour budget.
+     */
+    if (id != null) {
+      saveStash({ id, text: question });
+    }
+    setSentText(question);
+    setText('');
+    setState('asking');
+    timerRef.current = setTimeout(() => setState('gate'), ASKING_MS);
   }, []);
 
   const handleSubmit = useCallback(
@@ -131,12 +149,26 @@ export default function AnonAsk() {
 
   return (
     <div className="relative flex min-h-screen flex-col bg-presentation text-text-primary">
-      <header className="flex w-full items-center justify-center px-4 pt-8">
+      {/**
+       * The gate is where *every* anonymous visitor lands, including an account
+       * holder whose session expired on a bookmarked link — so sign-in must be
+       * reachable without walking the ask flow. Kept visually secondary: the
+       * primary action is still asking a question.
+       */}
+      <header className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 pt-8">
+        <span />
         <img
           src="assets/logo.svg"
           className="h-10 object-contain"
           alt={localize('com_ui_logo', { 0: APP_NAME })}
         />
+        <a
+          href={loginPage()}
+          data-testid="aflat-signin-link"
+          className="justify-self-end text-right text-sm text-text-secondary underline decoration-border-heavy underline-offset-2 transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
+        >
+          {localize('com_aflat_signin_link')}
+        </a>
       </header>
       <div className="absolute bottom-0 left-0 m-4">
         <ThemeSelector returnThemeOnly={true} />

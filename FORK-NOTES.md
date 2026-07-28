@@ -239,6 +239,27 @@ Rule: every deviation from upstream = one line here, same commit.
     are left alone. Upstream's existing cases are untouched (they cover the login-mutation paths,
     which did not change).
 
+- **`client/src/routes/AnonAsk.tsx` (Task 7 review fix, committed):** the gate dead-ended returning
+  users — since `useAuthRedirect` + `AuthContext` now bounce *every* anonymous visitor here, an
+  account holder whose session expired on a bookmarked link had no way to reach `/login` at all
+  (the only sign-in affordance was behind asking a question and hitting the gate panel). Added a
+  visually secondary `com_aflat_signin_link` anchor in the header, `href={loginPage()}` for the same
+  subdirectory-safety reason as `LoginGatePanel`. The header became a
+  `grid-cols-[1fr_auto_1fr]` so the logo stays optically centred with the link at the right edge.
+  New key in both catalogs; pinned by a case in `AnonAsk.spec.tsx`.
+
+- **`client/src/components/Aflat/anonStash.ts` + `client/src/routes/AnonAsk.tsx` (Task 7 review fix,
+  committed):** `saveStash`/`clearStash` were the only unguarded `localStorage` writes left (the ack
+  helpers already swallowed failures). In a browser with site data blocked or quota exhausted,
+  `saveStash` threw *after* the `201` and the throw was caught by the submit's outer `catch`, so the
+  visitor saw "couldn't save your question" for a question that **was** saved — and each retry
+  parked another orphan document nobody could ever claim while burning the 5/hour budget.
+  `saveStash` now returns a boolean and never throws, `clearStash` swallows likewise, and the submit
+  is restructured so the `try` ends at the response parse: **past the 2xx nothing can route back to
+  an error state**. A missing/unparseable `id` skips the stash and still gates (the only cost is the
+  post-signup auto-link, which Task 8 already treats as optional). Covered by storage-failure cases
+  in `anonStash.spec.ts` and an end-to-end blocked-storage case in `AnonAsk.spec.tsx`.
+
 ## Local dev environment notes (not upstream deviations, but needed to boot)
 - Node/npm: repo pins Node `24.16.0` (`.nvmrc`) and `npm@11.13.0` (`packageManager` in
   package.json); no `engines` field enforces this. Machine default via nvm was Node
