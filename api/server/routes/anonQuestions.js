@@ -1,7 +1,10 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const { logger } = require('@librechat/data-schemas');
-const { anonQuestionLimiter } = require('~/server/middleware/limiters/aflatLimiters');
+const {
+  anonQuestionLimiter,
+  anonQuestionLinkLimiter,
+} = require('~/server/middleware/limiters/aflatLimiters');
 const requireJwtAuth = require('~/server/middleware/requireJwtAuth');
 const { recordProductEvent } = require('./aflatEvents');
 const { AnonQuestion } = require('~/db/models');
@@ -48,8 +51,14 @@ router.post('/', anonQuestionLimiter, async (req, res) => {
  * Claim a parked question after signing in. Idempotent for the owner; a
  * question already claimed by someone else is indistinguishable from one that
  * does not exist (404), so ids cannot be probed for existence.
+ *
+ * The limiter runs BEFORE `requireJwtAuth` on purpose, for two reasons: failed
+ * auth attempts must count against the same per-IP budget (otherwise the
+ * throttle is trivially bypassed), and it keeps `req.user` unset at limiter
+ * time, which is what makes the no-IP-in-logs guarantee structural rather than
+ * a matter of remembering not to log.
  */
-router.post('/:id/link', requireJwtAuth, async (req, res) => {
+router.post('/:id/link', anonQuestionLinkLimiter, requireJwtAuth, async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
 
@@ -58,19 +67,32 @@ router.post('/:id/link', requireJwtAuth, async (req, res) => {
   }
 
   try {
-    const doc = await AnonQuestion.findById(id);
-    if (!doc || (doc.linkedUserId && String(doc.linkedUserId) !== String(userId))) {
+    /**
+     * One conditional update, not find-then-save: two concurrent claims from
+     * different users would otherwise both read `linkedUserId == null`, both
+     * write, and both get 200 plus the text. The `$or` is the guard — it matches
+     * only an unclaimed question or one this same user already holds, so the
+     * loser of a race matches nothing and falls through to the 404 below.
+     *
+     * `findOneAndUpdate` returns the PRE-image by default, which is exactly what
+     * we need: `previous.linkedUserId == null` is the "we are the claimer"
+     * signal that gates the event, and `text` is unaffected by the update.
+     */
+    const previous = await AnonQuestion.findOneAndUpdate(
+      { _id: id, $or: [{ linkedUserId: null }, { linkedUserId: userId }] },
+      { $set: { linkedUserId: userId } },
+      { new: false },
+    );
+
+    if (!previous) {
       return res.status(404).json({ error: 'not found' });
     }
 
-    const alreadyLinked = doc.linkedUserId != null;
-    if (!alreadyLinked) {
-      doc.linkedUserId = userId;
-      await doc.save();
+    if (previous.linkedUserId == null) {
       await recordProductEvent('gate_converted', { userId });
     }
 
-    return res.json({ id: doc._id, text: doc.text });
+    return res.json({ id: previous._id, text: previous.text });
   } catch (error) {
     logger.error('[anonQuestions] Error linking anonymous question', error);
     return res.status(500).json({ error: 'could not link question' });

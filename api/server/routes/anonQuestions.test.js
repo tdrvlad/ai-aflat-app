@@ -167,9 +167,14 @@ describe('POST /api/aflat/anon-questions/:id/link', () => {
   const createQuestion = () =>
     AnonQuestion.create({ text: 'Cât preaviz am la demisie?', ackVersion: 'v1-2026-07' });
 
+  /* Every test claims from its own source IP so the 10/hour link limiter — which
+   * counts failed-auth attempts too — cannot leak budget between cases. */
+  const link = (id, ip) =>
+    request(app).post(`/api/aflat/anon-questions/${id}/link`).set('X-Forwarded-For', ip);
+
   it('requires authentication', async () => {
     const doc = await createQuestion();
-    const res = await request(app).post(`/api/aflat/anon-questions/${doc._id}/link`);
+    const res = await link(doc._id, '10.2.0.1');
     expect(res.status).toBe(401);
   });
 
@@ -177,7 +182,7 @@ describe('POST /api/aflat/anon-questions/:id/link', () => {
     const doc = await createQuestion();
     mockCurrentUser = userA;
 
-    const res = await request(app).post(`/api/aflat/anon-questions/${doc._id}/link`);
+    const res = await link(doc._id, '10.2.0.2');
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ id: doc._id.toString(), text: 'Cât preaviz am la demisie?' });
@@ -194,38 +199,90 @@ describe('POST /api/aflat/anon-questions/:id/link', () => {
     const doc = await createQuestion();
     mockCurrentUser = userA;
 
-    const first = await request(app).post(`/api/aflat/anon-questions/${doc._id}/link`);
-    const second = await request(app).post(`/api/aflat/anon-questions/${doc._id}/link`);
+    const first = await link(doc._id, '10.2.0.3');
+    const second = await link(doc._id, '10.2.0.3');
 
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
     expect(second.body.text).toBe('Cât preaviz am la demisie?');
     expect(String((await AnonQuestion.findById(doc._id).lean()).linkedUserId)).toBe(userA.id);
+    /* The second claim is a no-op: it must not emit a duplicate conversion. */
+    expect(await ProductEvent.countDocuments({ name: 'gate_converted' })).toBe(1);
   });
 
   it('returns 404 when a different user tries to link an already-linked question', async () => {
     const doc = await createQuestion();
     mockCurrentUser = userA;
-    await request(app).post(`/api/aflat/anon-questions/${doc._id}/link`);
+    await link(doc._id, '10.2.0.4');
 
     mockCurrentUser = userB;
-    const res = await request(app).post(`/api/aflat/anon-questions/${doc._id}/link`);
+    const res = await link(doc._id, '10.2.0.4');
 
     expect(res.status).toBe(404);
     expect(String((await AnonQuestion.findById(doc._id).lean()).linkedUserId)).toBe(userA.id);
   });
 
+  /**
+   * The claim is a single conditional update, so a losing claimer matches
+   * nothing rather than overwriting the winner. This asserts those semantics
+   * directly (no need to reproduce a real race): once claimed, another user
+   * gets 404 and the owner keeps getting 200 — with exactly one conversion
+   * event for the whole sequence.
+   */
+  it('claims conditionally: only the owner keeps winning, and only once', async () => {
+    const doc = await createQuestion();
+
+    mockCurrentUser = userA;
+    const claimed = await link(doc._id, '10.2.0.5');
+    expect(claimed.status).toBe(200);
+
+    mockCurrentUser = userB;
+    const stolen = await link(doc._id, '10.2.0.6');
+    expect(stolen.status).toBe(404);
+    expect(stolen.body.text).toBeUndefined();
+
+    mockCurrentUser = userA;
+    const reclaimed = await link(doc._id, '10.2.0.5');
+    expect(reclaimed.status).toBe(200);
+    expect(reclaimed.body.text).toBe('Cât preaviz am la demisie?');
+
+    expect(String((await AnonQuestion.findById(doc._id).lean()).linkedUserId)).toBe(userA.id);
+    const events = await ProductEvent.find({ name: 'gate_converted' }).lean();
+    expect(events).toHaveLength(1);
+    expect(String(events[0].userId)).toBe(userA.id);
+  });
+
   it('returns 404 for an unknown id', async () => {
     mockCurrentUser = userA;
-    const res = await request(app).post(
-      `/api/aflat/anon-questions/${new mongoose.Types.ObjectId()}/link`,
-    );
+    const res = await link(new mongoose.Types.ObjectId(), '10.2.0.7');
     expect(res.status).toBe(404);
   });
 
   it('returns 404 for a malformed id instead of throwing', async () => {
     mockCurrentUser = userA;
-    const res = await request(app).post('/api/aflat/anon-questions/not-an-object-id/link');
+    const res = await link('not-an-object-id', '10.2.0.8');
     expect(res.status).toBe(404);
+  });
+
+  it('returns 429 on the eleventh claim attempt from the same IP within the window', async () => {
+    const ip = '198.51.100.50';
+    mockCurrentUser = userA;
+
+    /* Enumeration is exactly this shape: repeated misses against guessed ids. */
+    for (let i = 0; i < 10; i++) {
+      const miss = await link(new mongoose.Types.ObjectId(), ip);
+      expect(miss.status).toBe(404);
+    }
+
+    const doc = await createQuestion();
+    const blocked = await link(doc._id, ip);
+    expect(blocked.status).toBe(429);
+    /* Throttled before the handler ran — nothing was claimed or leaked. */
+    expect(blocked.body.text).toBeUndefined();
+    expect((await AnonQuestion.findById(doc._id).lean()).linkedUserId).toBeNull();
+
+    /* A different IP is unaffected — the limit is per-IP, not global. */
+    const other = await link(doc._id, '198.51.100.51');
+    expect(other.status).toBe(200);
   });
 });
