@@ -21,6 +21,7 @@ import {
   useAddedChatContext,
   useAssistantsMapContext,
 } from '~/Providers';
+import usePostLoginHandoff from '~/components/Aflat/usePostLoginHandoff';
 import PendingManualSkillsChips from './PendingManualSkillsChips';
 import { cn, getModelSpec, removeFocusRings } from '~/utils';
 import { useGetStartupConfig } from '~/data-provider';
@@ -192,6 +193,14 @@ const ChatForm = memo(function ChatForm({
   });
 
   useQueryParams({ textAreaRef });
+  /**
+   * ai-aflat: hands the question parked at `/ask` before signup into the user's
+   * first conversation. Mounted alongside `useQueryParams` because it is the same
+   * shape of thing — an auto-submit from outside the composer — and this is the
+   * innermost component that sits inside both the chat and chat-form contexts
+   * `useSubmitMessage` needs.
+   */
+  usePostLoginHandoff();
 
   const { ref, ...registerProps } = methods.register('text', {
     required: true,

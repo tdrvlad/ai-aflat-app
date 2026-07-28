@@ -21,6 +21,7 @@ import KeyboardDeleteDialog from '~/components/Nav/KeyboardDeleteDialog';
 import { useUserTermsQuery, useGetStartupConfig } from '~/data-provider';
 import useKeyboardShortcuts from '~/hooks/useKeyboardShortcuts';
 import { UnifiedSidebar } from '~/components/UnifiedSidebar';
+import ConsentModal from '~/components/Aflat/ConsentModal';
 import { TermsAndConditionsModal } from '~/components/ui';
 import { useHealthCheck } from '~/data-provider';
 import { Banner } from '~/components/Banners';
@@ -112,6 +113,12 @@ export default function Root() {
               modalContent={config.interface.termsOfService.modalContent}
             />
           )}
+          {/**
+           * ai-aflat: the one-time consent gate. Mounted here rather than in the
+           * chat view because it must block *every* authenticated route and
+           * survive conversation switches — this shell renders once per session.
+           */}
+          <ConsentModal />
           <KeyboardShortcutsProvider />
         </AssistantsMapContext.Provider>
       </FileMapContext.Provider>

@@ -293,6 +293,32 @@ Rule: every deviation from upstream = one line here, same commit.
     attachments, no balance. Confirmed by boot — the config loads with the labels intact, no
     "Outdated Config version" line and none of `checkInterfaceConfig`'s conflict warnings.
 
+- **`client/src/routes/Root.tsx` (Task 8, committed):** mounts `<ConsentModal />` in the
+  authenticated shell. The brief pointed at `ChatRoute.tsx`; Root was chosen instead because the
+  consent gate has to block *every* authenticated route rather than only the chat view, and must not
+  remount on conversation switches — Root renders once per session, and it already hosts
+  `TermsAndConditionsModal`, which is the same kind of gate. The modal is deliberately
+  non-dismissible (no close button; `onEscapeKeyDown`, `onPointerDownOutside` and `onInteractOutside`
+  all prevented) while still being a real Radix dialog, so focus stays trapped and the rest of the
+  page is inert — held by the boundary, not locked out of it.
+
+- **`client/src/components/Chat/Input/ChatForm.tsx` (Task 8, committed):** mounts
+  `usePostLoginHandoff()`, which claims the question parked at `/ask` before signup and submits it
+  into the user's first conversation. It lives here rather than in a route component because it needs
+  `useSubmitMessage`, which requires both the chat and chat-form contexts, and `ChatForm` is the
+  innermost component inside both. Three guards are load-bearing: it waits for consent to be
+  recorded (nothing is sent on the user's behalf before they accept the framing), for the
+  conversation to be the *new* one with its `modelSpecs` endpoint already applied, and against double
+  submission via a ref plus a module-level id set — `ChatForm` remounts on every conversation switch,
+  so a ref alone would not survive. A 404 from the claim endpoint clears the stash; every other
+  failure (429, offline, 5xx) leaves the question parked for a later mount and stays silent.
+
+- **`client/src/components/Aflat/{ConsentModal,consent,usePostLoginHandoff}` (Task 8, committed):**
+  new files, no upstream equivalent. Consent state is a single React Query key shared by the modal
+  and the handoff so the two can never disagree about whether consent exists; the POST writes the new
+  state straight into the cache rather than invalidating, so nothing sits between accepting and being
+  let in. `wordingVersion` is pinned at `v1-2026-07` in `consent.ts` and travels on every record.
+
 ## Local dev environment notes (not upstream deviations, but needed to boot)
 - Node/npm: repo pins Node `24.16.0` (`.nvmrc`) and `npm@11.13.0` (`packageManager` in
   package.json); no `engines` field enforces this. Machine default via nvm was Node
