@@ -600,7 +600,19 @@ export type TMessageContentParts =
       text?: string | TextData;
       error?: string;
     } & ContentMetadata)
-  | ({ type: ContentTypes.THINK; think?: string | TextData } & ContentMetadata)
+  | ({
+      type: ContentTypes.THINK;
+      think?: string | TextData;
+      /**
+       * ai-aflat: an optional display label for this reasoning segment, e.g.
+       * "Caut în legislație…" for a retrieval step vs. the default "Gândesc…"/
+       * "Gânduri" for plain reasoning. Additive and optional — a THINK part
+       * without it renders exactly as before. Lets a "querying" stage look
+       * visually distinct from "thinking" without a new content type or
+       * transport (see docs/integration/2026-07-29-answer-event-envelope-PROPOSAL.md).
+       */
+      stage_label?: string;
+    } & ContentMetadata)
   | ({
       type: ContentTypes.TEXT;
       text?: string | TextData;

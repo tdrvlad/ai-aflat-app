@@ -117,7 +117,13 @@ const Part = memo(function Part({
     if (typeof reasoning !== 'string') {
       return null;
     }
-    return <Reasoning reasoning={reasoning} isLast={isLast ?? false} />;
+    return (
+      <Reasoning
+        reasoning={reasoning}
+        isLast={isLast ?? false}
+        stageLabel={part.stage_label}
+      />
+    );
   } else if (part.type === ContentTypes.SOURCES) {
     const sources = part[ContentTypes.SOURCES];
     if (!Array.isArray(sources)) {

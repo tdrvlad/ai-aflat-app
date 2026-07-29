@@ -776,3 +776,30 @@ at `gray-200` and is untouched.
 **Standing hazard for anyone re-theming this fork:** collapsing two semantic tokens onto one value
 is invisible to the test suite and can be invisible in one theme only. Sweep the computed values,
 don't read the class names.
+
+### 2026-07-29 — `stage_label` on THINK content parts (thinking vs. querying)
+
+The product owner wants the streamed answer to visually distinguish "thinking" from "querying
+legislation" — not just one generic reasoning box for both. The fork already carries reasoning
+over the existing `THINK` content type / `customParams.reasoningKey` channel (no new transport
+needed for that part — see
+`docs/integration/2026-07-29-answer-event-envelope-PROPOSAL.md` in the parent repo), but
+`Reasoning.tsx` only ever rendered a hardcoded "Gândesc…"/"Gânduri" header regardless of what the
+segment actually was.
+
+Added one additive, optional field instead of a new content type: `stage_label?: string` on the
+`THINK` member of `TMessageContentParts`
+(`packages/data-provider/src/types/assistants.ts`). When a THINK part carries it, `Reasoning.tsx`
+shows that label instead of the generic one — e.g. `stage_label: "Caut în legislație…"` for a
+retrieval step. Absent, everything renders exactly as before; this is why it didn't need to wait
+on the search-engine session's still-open questions about `reasoningKey`/`reasoningFormat` values.
+
+- Changed: `packages/data-provider/src/types/assistants.ts` (field), `client/src/components/Chat/Messages/Content/Parts/Reasoning.tsx` (renders it), `client/src/components/Chat/Messages/Content/Part.tsx` (passes `part.stage_label` through).
+- Tests: `client/src/components/Chat/Messages/Content/Parts/__tests__/Reasoning.test.tsx` (7 cases)
+  — generic label idle/submitting with no `stage_label`, `stage_label` overriding both while
+  submitting and once done, empty reasoning still renders nothing, and the `Part.tsx` dispatch
+  wiring both with and without the field. `npx tsc --noEmit` clean against the rebuilt
+  `data-provider` package.
+- Not done here: the engine side of this (do orchestrator/search-engine emissions actually set
+  `stage_label`?) is the integration session's call — flagged in `integration-handoff.md`
+  (repo root) and the envelope proposal.

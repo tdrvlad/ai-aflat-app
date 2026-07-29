@@ -11,6 +11,8 @@ import { cn } from '~/utils';
 type ReasoningProps = {
   reasoning: string;
   isLast: boolean;
+  /** ai-aflat: overrides the generic "Gândesc…"/"Gânduri" header, e.g. for a querying stage. */
+  stageLabel?: string;
 };
 
 /**
@@ -35,7 +37,7 @@ type ReasoningProps = {
  *
  * For legacy text-based messages, see Thinking.tsx component.
  */
-const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
+const Reasoning = memo(({ reasoning, isLast, stageLabel }: ReasoningProps) => {
   const contentId = useId();
   const localize = useLocalize();
   const showThinking = useAtomValue(showThinkingAtom);
@@ -80,11 +82,12 @@ const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
 
   const effectiveIsSubmitting = isLatestMessage ? isSubmitting : false;
 
-  const label = useMemo(
-    () =>
-      effectiveIsSubmitting && isLast ? localize('com_ui_thinking') : localize('com_ui_thoughts'),
-    [effectiveIsSubmitting, localize, isLast],
-  );
+  const label = useMemo(() => {
+    if (stageLabel) {
+      return stageLabel;
+    }
+    return effectiveIsSubmitting && isLast ? localize('com_ui_thinking') : localize('com_ui_thoughts');
+  }, [effectiveIsSubmitting, localize, isLast, stageLabel]);
 
   if (!reasoningText) {
     return null;
