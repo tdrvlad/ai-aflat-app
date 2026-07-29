@@ -803,3 +803,91 @@ on the search-engine session's still-open questions about `reasoningKey`/`reason
 - Not done here: the engine side of this (do orchestrator/search-engine emissions actually set
   `stage_label`?) is the integration session's call — flagged in `integration-handoff.md`
   (repo root) and the envelope proposal.
+
+### 2026-07-29 — chat UX pass: composer placeholder, error-box tokens, error copy
+
+Polish + verify pass on the chat surface (composer, message list, empty/error states) ahead of the
+search-engine wiring session — see `.claude/tasks/chat-ux-pass.md` (parent repo) for the full
+brief. Verified live against a seeded local instance (own scratch Mongo DB + a locally-registered
+test account, `.env` untouched) rather than jsdom alone, so the fixes below are confirmed against
+the real component tree, not just unit assertions.
+
+- **Composer placeholder (`com_aflat_chat_placeholder`).** The authenticated chat composer
+  (`ChatForm.tsx`) had no placeholder of its own outside a project landing page — it fell through
+  to `useTextarea`'s generic per-endpoint fallback, which rendered "Mesaj ai-aflat" (the
+  `modelDisplayLabel` from `librechat.yaml` substituted into upstream's generic
+  `com_endpoint_message_new` template). New key added to both `ro`/`en` catalogs: „Scrie
+  întrebarea ta despre legislație" / "Write your question about legislation", voiced to match
+  `customWelcome` and `AnonAsk`'s `com_aflat_ask_placeholder`. The project-landing-page override
+  (`com_ui_new_chat_in_project`) is unchanged and still wins there. Split into a pure helper,
+  `client/src/components/Chat/getChatFormPlaceholder.ts`, called from `ChatView.tsx`, so the
+  project-vs-default branch is unit-testable without the component's provider stack — 5 cases in
+  `client/src/components/Chat/__tests__/getChatFormPlaceholder.spec.ts`.
+- **Error boxes were raw Tailwind red, not Pânza destructive tokens** — the exact hazard flagged
+  earlier in this file, just never swept for this pair. `ErrorBox` and `ConnectionError` in
+  `client/src/components/Chat/Messages/Content/MessageContent.tsx` carried
+  `border-red-500/20 bg-red-500/5 text-gray-600 dark:text-gray-200` (and a second, differently-off
+  pastel-red variant for the connection box) instead of `border-border-destructive
+  bg-surface-secondary text-text-destructive` — the same trio `AnonAsk.tsx`'s inline error banner
+  and `Sources.tsx`'s repealed-article marker already use. Confirmed by seeding real `error`
+  content-part messages (`ContentTypes.ERROR`, the same path `Part.tsx` dispatches) into a live
+  conversation and screenshotting both themes: the raw-red boxes read as a duller, inconsistent
+  red against the rest of the app; the token-based boxes now match the repealed-article spine
+  exactly, in both themes.
+- **Two hardcoded English strings shown to Romanian users, fixed the same way.** Both are on the
+  same generic-error render path `Part.tsx`'s `ContentTypes.ERROR` branch and the legacy
+  text-message `error`/`unfinished` flags both go through, so a custom orchestrator error that
+  doesn't match LibreChat's own `ErrorTypes`/`ViolationTypes` vocabulary — the expected case for
+  ai-aflat's own error surface — hits this every time, not just on an edge case:
+  - `client/src/components/Messages/Content/Error.tsx`'s `defaultResponse` fallback was a literal
+    `` `Something went wrong. Here's the specific error message we encountered: ${errorMessage}` ``.
+    Now `localize('com_aflat_error_generic_details', { 0: errorMessage })`. The interpolated detail
+    string itself is untouched (still whatever the backend sent, verbatim) — only the wrapper
+    sentence is localized.
+  - `MessageContent.tsx`'s `UnfinishedMessage` (the "incomplete response" notice) was a hardcoded
+    English sentence passed as `text` into `ErrorMessage`, which then routed it through the same
+    `Error` component above — so it was double-narrated ("Something went wrong... The response is
+    incomplete...") even before this pass touched anything. `UnfinishedMessage` now renders
+    directly in `ErrorBox` with `localize('com_aflat_error_incomplete_response')`, bypassing
+    `Error`'s JSON/generic-wrap logic entirely: the incomplete-response text is already a complete,
+    human-authored sentence, not a raw code that needs a "here's the technical detail" frame.
+  - Both new keys (`com_aflat_error_generic_details`, `com_aflat_error_incomplete_response`) added
+    to both `ro`/`en` catalogs, RO drafted then passed through the `language-checker` agent
+    unchanged (no register issues found).
+  - `com_ui_error_connection`'s RO value was also checked by `language-checker` and flagged as
+    tilting technical ("Eroare de conectare la server...") against the product's "explain to a
+    neighbour" voice; replaced with „Nu mă pot conecta la server. Reîmprospătează pagina." The
+    English value and the `ERROR_CONNECTION_TEXT` literal match-key in `MessageContent.tsx` are
+    unchanged — only the RO display string moved.
+  - Tests: `client/src/components/Messages/Content/__tests__/Error.spec.tsx` (3 cases) and
+    `client/src/components/Chat/Messages/Content/__tests__/MessageContent.spec.tsx` (4 cases) —
+    computed classes assert the destructive tokens and assert no `red-\d` class survives, both
+    localized strings render in `en` and `ro`, and a recognized `ErrorTypes` JSON code still
+    resolves to its own message rather than the generic wrapper.
+- **Empty-state check:** `Landing.tsx` + `ConversationStarters` render correctly at the
+  authenticated `/c/new` route (verified live, both themes) — greeting from `customWelcome`, no
+  starter chips (the `conversation_starters` list in `librechat.yaml` is empty, so
+  `ConversationStarters` correctly renders nothing). **This route is not what real users see
+  today**: `librechat.yaml`'s `registration.allowedDomains: ['sapio.ro']` collection gate (Task 10)
+  means only `@sapio.ro` accounts can sign in via Clerk at all, so the authenticated landing page is
+  reachable only by the internal team; every public visitor lands on `/ask` (`AnonAsk.tsx`) instead,
+  per the phase-1 plan's `STATUS` section. No `librechat.yaml` change made — adding starters to a
+  route the public can't reach yet isn't a live gap, and the file is otherwise off limits per the
+  task brief.
+- **Mobile pass:** `Sources.tsx`'s citation-box grid confirmed stacking to a single column below the
+  `sm:` breakpoint at 390×844 with no clipping or horizontal overflow, in both themes, verified
+  against a real seeded conversation (not just the jsdom fixture test). A suspected sidebar
+  default-visibility bug at 390px (drawer open covering most of the screen on load) turned out to
+  be a **false alarm from this session's own test methodology**: `store.sidebarExpanded`
+  (`unifiedSidebarExpanded` in localStorage) had been written `true` while the same browser session
+  was still at a desktop viewport, and that persisted preference — not a fresh-visitor default —
+  is what showed up after resizing down. With that key cleared, a genuinely fresh session at 390px
+  defaults closed exactly as `client/src/store/settings.ts` intends
+  (`window.matchMedia('(max-width: 768px)')`). Recorded here so the correction doesn't get
+  rediscovered as a regression. The full mobile matrix (composer, sidebar open/close interaction,
+  AnonAsk flow, empty state) at 390×844 in both themes, and the `e2e/playwright.config.ts`
+  Mobile Chrome/Safari question, are deferred to one consolidated verification pass rather than
+  interleaved through this session, per product-owner direction mid-task.
+- Verified: full client suite `239/239 suites, 2898/2898 tests` green (no regressions from the
+  locale JSON edits or the two touched render paths), `npx tsc --noEmit` clean, `npm run build`
+  clean, `eslint` clean on every touched file.

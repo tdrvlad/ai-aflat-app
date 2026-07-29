@@ -14,6 +14,7 @@ import {
   useLocalize,
 } from '~/hooks';
 import { ChatContext, AddedChatContext, ChatFormProvider, useFileMapContext } from '~/Providers';
+import { getChatFormPlaceholder } from './getChatFormPlaceholder';
 import ConversationStarters from './Input/ConversationStarters';
 import { useGetMessagesByConvoId } from '~/data-provider';
 import ProjectLandingChip from './ProjectLandingChip';
@@ -90,10 +91,11 @@ function ChatView({ index = 0, project }: { index?: number; project?: TChatProje
     content = <Landing centerFormOnLanding={centerFormOnLanding} />;
   }
 
-  const chatFormPlaceholder =
-    isProjectLandingPage && project
-      ? localize('com_ui_new_chat_in_project', { name: project.name })
-      : undefined;
+  const chatFormPlaceholder = getChatFormPlaceholder({
+    isProjectLandingPage,
+    projectName: project?.name,
+    localize,
+  });
 
   return (
     <ChatFormProvider {...methods}>
