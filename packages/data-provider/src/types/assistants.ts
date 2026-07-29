@@ -565,6 +565,35 @@ export type SummaryContentPart = {
   };
 };
 
+/**
+ * ai-aflat: one legislative source the retrieval step actually returned, carried
+ * verbatim from the search engine's Entity result (see
+ * `docs/superpowers/specs/2026-07-27-search-api-contract.md`). `url` is the only
+ * link the UI may ever show for this source — it is never constructed, completed
+ * or repaired client-side; absent means no link.
+ */
+export type TAflatSource = {
+  entity_id?: string;
+  entity_type?: 'article' | 'chapter' | 'act';
+  /** Entity label, e.g. "Art. 26" */
+  title?: string;
+  /** Parent act title, e.g. "Legea nr. 50/1991 privind autorizarea…" */
+  act_title?: string;
+  /** Relevant excerpt, plain text */
+  snippet?: string;
+  /** Article-level legislatie.just.ro URL exactly as retrieval returned it */
+  url?: string;
+  /** False = repealed; the UI must say so */
+  in_force?: boolean;
+  /** True = the answer actually leaned on this source. Absent = treat as cited. */
+  cited?: boolean;
+};
+
+export type SourcesContentPart = {
+  type: ContentTypes.SOURCES;
+  sources: TAflatSource[];
+};
+
 export type TMessageContentParts =
   | ({
       type: ContentTypes.ERROR;
@@ -590,6 +619,7 @@ export type TMessageContentParts =
     } & ContentMetadata)
   | ({ type: ContentTypes.IMAGE_FILE; image_file: ImageFile & PartMetadata } & ContentMetadata)
   | (SummaryContentPart & ContentMetadata)
+  | (SourcesContentPart & ContentMetadata)
   | (Agents.AgentUpdate & ContentMetadata)
   | (Agents.MessageContentImageUrl & ContentMetadata)
   | (Agents.MessageContentVideoUrl & ContentMetadata)

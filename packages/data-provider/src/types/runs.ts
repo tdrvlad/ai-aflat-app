@@ -12,6 +12,9 @@ export enum ContentTypes {
   AGENT_UPDATE = 'agent_update',
   SUMMARY = 'summary',
   ERROR = 'error',
+  /** ai-aflat: legislative sources retrieval returned for an answer. Additive —
+   *  these are persisted values, so nothing above may be reordered or renamed. */
+  SOURCES = 'sources',
 }
 
 export enum StepTypes {

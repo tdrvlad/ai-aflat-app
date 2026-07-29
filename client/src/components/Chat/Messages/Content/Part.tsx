@@ -14,6 +14,7 @@ import {
   AgentUpdate,
   EmptyText,
   Reasoning,
+  Sources,
   Summary,
   Text,
   SkillCall,
@@ -117,6 +118,12 @@ const Part = memo(function Part({
       return null;
     }
     return <Reasoning reasoning={reasoning} isLast={isLast ?? false} />;
+  } else if (part.type === ContentTypes.SOURCES) {
+    const sources = part[ContentTypes.SOURCES];
+    if (!Array.isArray(sources)) {
+      return null;
+    }
+    return <Sources sources={sources} />;
   } else if (part.type === ContentTypes.SUMMARY) {
     return (
       <Summary

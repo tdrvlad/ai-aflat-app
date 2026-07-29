@@ -699,3 +699,53 @@ Rule: every deviation from upstream = one line here, same commit.
     `jest.mock('@librechat/client', …, { virtual: true })` intermittently not applying, so the real
     Radix `OGDialog` portals out of `container`. Not touched — Skills is a surface this deployment
     disables.
+
+- **Citation boxes — the `sources` content part (2026-07-29, committed):** when the search engine
+  is wired in, the legislative sources behind an answer render as discrete numbered citation boxes
+  under the message, not as a footnote list. Built against fixtures — the engine is not reachable
+  and nothing emits this shape yet; the renderer takes a `sources[]` array and does not care where
+  it came from. Shape is the one proposed in the parent repo's
+  `docs/integration/2026-07-29-answer-event-envelope-PROPOSAL.md`, which is itself the search
+  contract's Entity result (`entity_id`, `entity_type`, `title`, `act_title`, `snippet`, `url`,
+  `in_force`) plus `cited`.
+  - `packages/data-provider/src/types/runs.ts`: `ContentTypes.SOURCES = 'sources'`, appended after
+    `ERROR`. Purely additive — these are persisted values, so nothing above it may be reordered or
+    renamed.
+  - `packages/data-provider/src/types/assistants.ts`: `TAflatSource` + `SourcesContentPart`, and
+    the part added to the `TMessageContentParts` union so `Part.tsx` narrows on it.
+  - `client/src/components/Chat/Messages/Content/Parts/Sources.tsx` (new), exported from
+    `Parts/index.ts` and dispatched from `Part.tsx` next to the `THINK` branch, the same way
+    `Reasoning.tsx` is.
+  - **The URL is never constructed, completed or repaired.** `linkHref()` returns the string
+    retrieval sent, unmodified, and only when it is already an absolute `http(s)` address;
+    anything else — missing, empty, whitespace, a bare relative fragment, a `javascript:` scheme —
+    renders the box with **no anchor at all** rather than a guessed one. This is the product's
+    hard invariant (every reference traces to something retrieval actually returned), so it is
+    pinned by two tests, not left to review.
+  - `in_force: false` is unmissable: the box's 2px left spine turns `--border-destructive`, an
+    „ABROGAT" badge sits next to the article label, and a red line says
+    „Acest text nu mai este în vigoare." `cited: false` sources never mix with the rest — they sit
+    in a `<details>` under „Alte surse consultate (n)", on a transparent ground so they read as
+    secondary, numbered continuously after the cited ones. An array with no `cited` field anywhere
+    is treated as all-cited. `sources: []` renders **nothing** — empty retrieval is a normal
+    outcome, not an empty state to announce.
+  - Style is Pânza semantic tokens only, no hex: box `bg-surface-secondary` on the message's
+    `bg-presentation` ground — browser-computed against the built CSS, `rgb(241,236,225)` on
+    `rgb(251,249,243)` light and `rgb(21,36,56)` on `rgb(10,21,36)` dark, so the box is a box in
+    both themes (the standing constraint from the two token-collapse entries above). The numeral
+    sits in its own gutter in `font-display` (Fraunces) — the numbering is load-bearing, not
+    decoration: a later phase references boxes from the answer text by number.
+  - Locale keys `com_aflat_sources_*` (5) added to **both** `ro` and `en` — RO 1820 → 1825,
+    EN 1957 → 1962, both still sorted, RO still zero cedilla. RO is the shipped copy; the fork's
+    en-only rule in `CLAUDE.md` is upstream's, and this product's user-facing language is Romanian.
+  - Tests: `client/src/components/Chat/Messages/Content/Parts/__tests__/Sources.test.tsx`
+    (12 cases) — box count, empty array, continuous numbering, exact `href` + `target="_blank"` +
+    `rel="noopener noreferrer"`, no anchor without a url, no anchor for an unusable one, the
+    repealed marker, the secondary group, absent-`cited` handling, the Romanian copy, and the
+    `Part.tsx` dispatch. `src/components/Aflat`, `src/routes`, `src/components/UnifiedSidebar`
+    stay at 93/93.
+  - Build gotcha, environment not repo: `npm run build:data-provider` fails on a clean checkout
+    here because tsdown 0.22.2 loads its config through the optional peer `unrun`, which this
+    install does not have — and its `rimraf dist` runs first, so a failed build leaves the package
+    with no `dist` and every consumer broken. Fixed locally by dropping `unrun@0.3.1` into
+    `node_modules/` (no `package.json` / lockfile change) and building under node v24.16.0.
