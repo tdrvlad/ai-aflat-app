@@ -1,14 +1,34 @@
 <!DOCTYPE html>
-<html lang="en-US">
+<html lang="ro-RO">
   <head>
     <meta charset="utf-8" />
     <base href="/" />
-    <meta name="theme-color" content="#171717" />
+    <meta name="theme-color" content="#fbf9f3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a1524" media="(prefers-color-scheme: dark)" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="description" content="LibreChat - An open source chat application with support for multiple AI models" />
-    <title>LibreChat</title>
+    <meta
+      name="description"
+      content="Întreabă în limba română despre legile în vigoare și primești un răspuns cu trimitere la textul de lege. Informații despre legislație, nu consultanță juridică."
+    />
+    <title>ai-aflat — Asistentul AI pentru legile din România</title>
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ai-aflat" />
+    <meta property="og:locale" content="ro_RO" />
+    <meta property="og:title" content="ai-aflat — Asistentul AI pentru legile din România" />
+    <meta
+      property="og:description"
+      content="Întreabă în limba română despre legile în vigoare și primești un răspuns cu trimitere la textul de lege. Informații despre legislație, nu consultanță juridică."
+    />
+    <meta property="og:image" content="assets/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ai-aflat — Asistentul AI pentru legile din România" />
+    <meta
+      name="twitter:description"
+      content="Întreabă în limba română despre legile în vigoare și primești un răspuns cu trimitere la textul de lege. Informații despre legislație, nu consultanță juridică."
+    />
+    <meta name="twitter:image" content="assets/og-image.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon-180x180.png" />
@@ -26,15 +46,20 @@
       const loadingContainerStyle = document.createElement('style');
       let backgroundColor;
 
+      /* Pânza ground colours, kept in step with --gray-900 / --gray-50 in src/style.css.
+         This paints the pre-hydration splash, so a mismatch shows as a flash. */
+      const AFLAT_NIGHT = '#0a1524';
+      const AFLAT_LINEN = '#fbf9f3';
+
       if (theme === 'dark') {
-        backgroundColor = '#0d0d0d';
+        backgroundColor = AFLAT_NIGHT;
       } else if (theme === 'light') {
-        backgroundColor = '#ffffff';
+        backgroundColor = AFLAT_LINEN;
       } else if (theme === 'system') {
         const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        backgroundColor = prefersDarkScheme ? '#0d0d0d' : '#ffffff';
+        backgroundColor = prefersDarkScheme ? AFLAT_NIGHT : AFLAT_LINEN;
       } else {
-        backgroundColor = '#ffffff';
+        backgroundColor = AFLAT_LINEN;
       }
 
       loadingContainerStyle.innerHTML = `

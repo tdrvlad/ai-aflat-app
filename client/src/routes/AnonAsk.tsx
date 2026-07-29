@@ -5,11 +5,10 @@ import AckBar from '~/components/Aflat/AckBar';
 import StarterChips from '~/components/Aflat/StarterChips';
 import LoginGatePanel from '~/components/Aflat/LoginGatePanel';
 import { ACK_VERSION, hasAcked, saveAck, saveStash } from '~/components/Aflat/anonStash';
+import { BrandLockup, APP_NAME } from '~/components/Brand';
 import { cn, removeFocusRings } from '~/utils';
 import { useLocalize } from '~/hooks';
 
-/** Brand name — not translated. */
-const APP_NAME = 'ai-aflat';
 /** Matches the server's `text` bound on `POST /api/aflat/anon-questions`. */
 const MAX_QUESTION_LENGTH = 4000;
 /** How long the thinking dots run before the gate replaces them. */
@@ -157,11 +156,7 @@ export default function AnonAsk() {
        */}
       <header className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 pt-8">
         <span />
-        <img
-          src="assets/logo.svg"
-          className="h-10 object-contain"
-          alt={localize('com_ui_logo', { 0: APP_NAME })}
-        />
+        <BrandLockup className="h-10" alt={localize('com_ui_logo', { 0: APP_NAME })} />
         <a
           href={loginPage()}
           data-testid="aflat-signin-link"

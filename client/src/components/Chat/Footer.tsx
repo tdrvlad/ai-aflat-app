@@ -1,7 +1,6 @@
 import React, { useEffect, memo } from 'react';
 import TagManager from 'react-gtm-module';
 import ReactMarkdown from 'react-markdown';
-import { Constants } from 'librechat-data-provider';
 import type { TStartupConfig } from 'librechat-data-provider';
 import { useGetStartupConfig } from '~/data-provider';
 import { useLocalize } from '~/hooks';
@@ -36,13 +35,15 @@ function Footer({ className, startupConfig }: FooterProps) {
     </a>
   );
 
+  /**
+   * Upstream's default is a LibreChat version badge linking to librechat.ai. We show
+   * the legal-framing line instead — it is the one thing that has to be in front of a
+   * user on every chat screen. `customFooter` (librechat.yaml) still overrides.
+   */
   const mainContentParts = (
     typeof config?.customFooter === 'string'
       ? config.customFooter
-      : '[LibreChat ' +
-        Constants.VERSION +
-        '](https://librechat.ai) - ' +
-        localize('com_ui_latest_footer')
+      : localize('com_aflat_footer_tagline')
   ).split('|');
 
   useEffect(() => {

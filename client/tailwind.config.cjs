@@ -10,14 +10,17 @@ module.exports = {
   // darkMode: 'class',
   darkMode: ['class'],
   theme: {
+    /**
+     * ai-aflat „Pânza”: Albert Sans for UI/body, Fraunces for display. Both are
+     * self-hosted (`client/public/fonts`, @font-face in `src/style.css`) — never
+     * fetched from Google. Inter stays as the first fallback so a cold cache still
+     * renders in the metrics the layout was built against; mono is untouched.
+     */
     fontFamily: {
-      sans: ['Inter', 'sans-serif'],
+      sans: ['Albert Sans', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+      display: ['Fraunces', 'Georgia', 'Times New Roman', 'serif'],
       mono: ['Roboto Mono', 'monospace'],
     },
-    // fontFamily: {
-    //   sans: ['Söhne', 'sans-serif'],
-    //   mono: ['Söhne Mono', 'monospace'],
-    // },
     extend: {
       width: {
         authPageWidth: '370px',
@@ -64,33 +67,39 @@ module.exports = {
         'shortcut-shake': 'shortcut-shake 0.25s ease-in-out',
       },
       colors: {
+        /* Kept byte-for-byte in step with the `--gray-*` / `--green-*` custom
+           properties in `src/style.css` — components reach the same colours through
+           both routes, so the two lists must not drift. */
         gray: {
-          20: '#ececf1',
-          50: '#f7f7f8',
-          100: '#ececec',
-          200: '#e3e3e3',
-          300: '#cdcdcd',
-          400: '#999696',
-          500: '#595959',
-          600: '#424242',
-          700: '#2f2f2f',
-          800: '#212121',
-          850: '#171717',
-          900: '#0d0d0d',
+          20: '#e9e2d3',
+          50: '#fbf9f3',
+          100: '#f1ece1',
+          200: '#e3dccd',
+          300: '#c9bfa9',
+          400: '#93876f',
+          500: '#4e5b68',
+          600: '#33465a',
+          700: '#1d3149',
+          800: '#152438',
+          850: '#0f1d30',
+          900: '#0a1524',
         },
         green: {
-          50: '#f1f9f7',
-          100: '#def2ed',
-          200: '#a6e5d6',
-          300: '#6dc8b9',
-          400: '#41a79d',
-          500: '#10a37f',
-          550: '#349072',
-          600: '#126e6b',
-          700: '#0a4f53',
-          800: '#06373e',
-          900: '#031f29',
+          50: '#eff8f2',
+          100: '#d8efe1',
+          200: '#aedcc2',
+          300: '#6ee7a8',
+          400: '#3fb56d',
+          500: '#1c7a3d',
+          550: '#19693d',
+          600: '#16612f',
+          700: '#125027',
+          800: '#0e3e1f',
+          900: '#092a15',
         },
+        cta: 'var(--cta)',
+        'cta-hover': 'var(--cta-hover)',
+        link: 'var(--link)',
         'brand-purple': 'var(--brand-purple)',
         presentation: 'var(--presentation)',
         'text-primary': 'var(--text-primary)',

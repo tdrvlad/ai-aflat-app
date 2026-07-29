@@ -137,11 +137,14 @@ export default defineConfig(({ command }) => ({
       },
       includeAssets: [],
       manifest: {
-        name: 'LibreChat',
-        short_name: 'LibreChat',
+        name: 'ai-aflat — Asistentul AI pentru legile din România',
+        short_name: 'ai-aflat',
+        lang: 'ro-RO',
+        description:
+          'Întreabă în limba română despre legile în vigoare și primești un răspuns cu trimitere la textul de lege.',
         display: 'standalone',
-        background_color: '#000000',
-        theme_color: '#009688',
+        background_color: '#0a1524',
+        theme_color: '#0a1524',
         icons: [
           {
             src: 'assets/favicon-32x32.png',

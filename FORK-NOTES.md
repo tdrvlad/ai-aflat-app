@@ -572,3 +572,82 @@ Rule: every deviation from upstream = one line here, same commit.
     block in `librechat.yaml` and `AFLAT_ANON_QUESTION_MAX=0` — and that file's gate comment still
     reads "approved but not yet in the code", which is now stale. Opening the gate and correcting
     that comment are sequenced by the deploy runbook, not by this change.
+
+- **Pânza visual identity (Task 9, committed):** the app now carries ai-aflat's identity in both
+  themes instead of LibreChat's. Source of truth is `website/assets/tokens.css` in the parent repo —
+  values are **copied**, never linked across repos, so a token change there needs a deliberate copy
+  here. Nothing was renamed or deleted: every LibreChat custom property keeps its name and only its
+  value moved, which is why ~2900 client tests and every untouched component still work.
+  - `client/src/style.css`: the `--gray-*` ramp was repainted into a single scale that runs warm at
+    the light end (`50 #fbf9f3` linen ground → `100 #f1ece1` flax → `200 #e3dccd` hairline →
+    `400 #93876f` clay) and cool-navy at the dark end (`700 #1d3149` → `800 #152438` ink →
+    `900 #0a1524` night). That works because light surfaces only ever read 20–300 and light text
+    reads 500–800, while dark does the reverse — so one ramp serves both themes and every
+    `bg-gray-*` / `text-gray-*` class in the tree comes along for free. `--green-*` was re-anchored
+    on `--msg-ok`, `--red-*` on the folk red `#b42b30`, and `--amber-300/700` on `--msg-warn`.
+  - **`--red` is feedback and destructive only, never a CTA or a primary button** — tokens.css says
+    so explicitly and the comment is repeated in `style.css` so the next person does not "improve"
+    it. The CTA is `--panza-cta` `#1e56a0` (light) / `#2a62be` (dark), reached through a new
+    per-theme `--cta` / `--cta-hover` / `--link` set in the `html` and `.dark` blocks;
+    `--surface-submit` and `--brand-purple` now point at it, as does the shadcn `--primary` HSL
+    triple, so the default `Button` variant is CTA blue rather than near-black.
+  - **Only four semantic remaps were needed**, all light-theme: `--presentation`,
+    `--surface-primary`, `--surface-chat` and `--header-primary` moved off `--white` onto the linen
+    ground, and `--surface-tertiary` moved from `--gray-100` down to `--gray-20`. That last one is
+    not cosmetic — grounding primary on linen collapsed `--surface-secondary` and
+    `--surface-tertiary` onto the same flax, which would have made the composer invisible inside a
+    panel (154 and 134 usages respectively). The light ladder is now
+    `#ffffff > #fbf9f3 > #f1ece1 > #e9e2d3 > #e3dccd`, monotone and distinct.
+  - Dark `--text-tertiary` moved `--gray-500` → `--gray-400` and dark `--text-destructive`
+    `--red-600` → `--red-400`. Both were **contrast fixes**: on the navy ground the upstream picks
+    landed at 2.4:1 and 3.0:1. They are now 5.2:1 and 5.5:1.
+  - **Known AA failure, deliberately not papered over:** the dark CTA fill `#2a62be` on the dark
+    ground `#0a1524` is **3.13:1**, under the 4.5:1 bar the task set. Those are tokens.css's own
+    dark values. It does clear WCAG 2.2 SC 1.4.11 (non-text contrast, ≥3:1), which is the criterion
+    that actually governs a control fill against its background, and the button's white label sits
+    at 5.85:1, so no text fails. The one in-palette alternative, `--cta-hover #4a8dff`, fixes the
+    fill (5.71:1) but drops the white label to 3.21:1 — a net loss. Fixing it properly means moving
+    the dark CTA in `website/assets/tokens.css`, which is a brand decision for the whole site and
+    deliberately out of scope for the fork.
+  - **Fonts are self-hosted, and must stay that way.** Albert Sans (UI/body) and Fraunces (display)
+    ship as six variable woff2 in `client/public/fonts/`, declared with `@font-face` beside the
+    existing Inter/Roboto Mono block and resolved through the `$fonts` vite alias. Two cuts per
+    family — `latin` plus `latin-ext`, which is where Romanian's comma-below ș/ț and ă actually
+    live; a latin-only subset would have rendered the product's own copy in a fallback face.
+    Do **not** add a Google Fonts `<link>`: the website still has one and that is a live GDPR
+    problem (`docs/backlog/2026-07-28-selfhost-website-fonts-gdpr.md`) that stops at this repo's
+    boundary. `tailwind.config.cjs` gained `fontFamily.display`; `sans` keeps Inter as first
+    fallback so a cold cache renders in metrics close to what the layout was built against.
+  - Brand assets in `client/public/assets/` (that is where the favicons already lived — the plan's
+    guess of a new directory was wrong): favicons, `icon-192x192`, `apple-touch-icon-180x180` and
+    `maskable-icon` regenerated from `website/assets/icon.png`; the two lockups copied at 720px.
+    New `client/src/components/Brand/` exports `BrandLockup` + `APP_NAME` and does the light/dark
+    lockup swap **in CSS, not state** — the app supports a `system` theme where no React code knows
+    which way the OS leans. Both images are in the DOM; only the visible one carries alt text.
+  - **`website/assets/og-image.png` is corrupt** — truncated at exactly 196608 bytes with no IEND
+    chunk, so only the top ~30% decodes. The live website links it as `og:image`, so ai-aflat's
+    social card is currently broken *on the website*; that needs a fix in the parent repo. Rather
+    than copy a broken file, the app's `og-image.png` was rebuilt at 1200×630 from the surviving
+    palette (tricolor band, navy diagonal wash) plus the white lockup.
+  - De-LibreChat: `index.html` (RO title/description/OG/twitter, `lang="ro-RO"`, per-scheme
+    `theme-color`, Pânza pre-hydration splash colours), the PWA manifest in `vite.config.ts`,
+    `Startup.tsx` and `Marketplace.tsx` document titles, `About.tsx`'s diagnostics blob (its spec
+    pin moved with it), `AuthLayout.tsx`, and both footers. `Chat/Footer.tsx` no longer defaults to
+    a LibreChat version badge linking to librechat.ai — it renders the legal-framing line, as does
+    the auth `Footer.tsx`, which also lost its `if (!startupConfig) return null` early exit so the
+    disclaimer and the privacy link survive a config fetch failure. New key
+    `com_aflat_footer_tagline` in `ro`/`en`; `LibreChat` → `ai-aflat` in
+    `com_agents_mcp_trust_subtext` / `com_ui_api_keys_description` across all 42 catalogues.
+  - **What deliberately still says LibreChat:** every `librechat-data-provider` / `@librechat/*`
+    module specifier; `application/vnd.librechat.*` artifact MIME types and the
+    `librechat:message-content-layout-change` event name (wire formats — renaming them breaks the
+    server contract); `window.__LIBRECHAT_CONFIG__`; the `librechat-rum-proxy` API key; code
+    comments and test fixtures; `client/public/assets/logo.svg` (now referenced by nothing but the
+    upstream READMEs); the 29 `com_ui_admin_access_warning` translations that name `librechat.yaml`,
+    because the file really is called that; and the admin-only `librechat.ai` docs link in
+    `AdminSettingsDialog.tsx`, whose visible text is `com_ui_more_info`. **The MIT LICENSE and the
+    upstream READMEs are untouched — that is a licence obligation, not an oversight.**
+  - Not done here: `client/dist` is a build artifact and is gitignored, so this needs a rebuild and
+    a reship before it reaches production. `packages/client/src/theme/themes/{default,dark}.ts`
+    still carry upstream's RGB triples — they are dead code in this fork (nothing imports
+    `applyTheme`), so they were left alone rather than forked into a second source of truth.

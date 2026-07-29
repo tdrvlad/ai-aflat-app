@@ -10,55 +10,72 @@
 :root {
   --white: #fff;
   --black: #000;
-  --gray-20: #ececf1;
-  --gray-50: #f7f7f8;
-  --gray-100: #ececec;
-  --gray-200: #e3e3e3;
-  --gray-300: #cdcdcd;
-  --gray-400: #999696;
-  --gray-500: #595959;
-  --gray-600: #424242;
-  --gray-700: #2f2f2f;
-  --gray-800: #212121;
-  --gray-850: #171717;
-  --gray-900: #0d0d0d;
-  --green-50: #ecfdf5;
-  --green-100: #d1fae5;
-  --green-200: #a7f3d0;
-  --green-300: #6ee7b7;
-  --green-400: #34d399;
-  --green-500: #10b981;
-  --green-600: #059669;
-  --green-700: #047857;
-  --green-800: #065f46;
-  --green-900: #064e3b;
-  --green-950: #022c22;
-  --red-50: #fef2f2;
-  --red-100: #fee2e2;
-  --red-200: #fecaca;
-  --red-300: #fca5a5;
-  --red-400: #f87171;
-  --red-500: #ef4444;
-  --red-600: #dc2626;
-  --red-700: #b91c1c;
-  --red-800: #991b1b;
-  --red-900: #7f1d1d;
-  --red-950: #450a0a;
+  /* ai-aflat „Pânza”. Values mirror website/assets/tokens.css — that file is the
+     single source of truth for the identity; change colours there first, then here.
+     The neutral ramp runs warm at the light end (linen → flax → hairline → clay) and
+     cool-navy at the dark end, so one scale serves both themes: light surfaces take
+     20–300, light text takes 500–800, dark surfaces take 700–900, dark text takes
+     50–400. */
+  --gray-20: #e9e2d3;
+  --gray-50: #fbf9f3; /* tokens --bg: linen ground */
+  --gray-100: #f1ece1; /* tokens --flax: raised beige bands / cards */
+  --gray-200: #e3dccd; /* tokens --line: hairline */
+  --gray-300: #c9bfa9;
+  --gray-400: #93876f; /* tokens --placeholder: clay */
+  --gray-500: #4e5b68; /* tokens --ink-soft */
+  --gray-600: #33465a; /* tokens --body-text */
+  --gray-700: #1d3149;
+  --gray-800: #152438; /* tokens --ink / --navy */
+  --gray-850: #0f1d30;
+  --gray-900: #0a1524; /* tokens dark --bg */
+  /* success family, anchored on tokens --msg-ok (#1c7a3d light / #6ee7a8 dark) */
+  --green-50: #eff8f2;
+  --green-100: #d8efe1;
+  --green-200: #aedcc2;
+  --green-300: #6ee7a8;
+  --green-400: #3fb56d;
+  --green-500: #1c7a3d;
+  --green-600: #16612f;
+  --green-700: #125027;
+  --green-800: #0e3e1f;
+  --green-900: #092a15;
+  --green-950: #05170c;
+  /* folk red — feedback/destructive only. NEVER a CTA or a primary button
+     (see the comment on --red in website/assets/tokens.css). */
+  --red-50: #fdf3f3;
+  --red-100: #f9e2e3;
+  --red-200: #f2c3c5;
+  --red-300: #ff9aa0; /* tokens dark --msg-err */
+  --red-400: #e2646a; /* tokens dark --red-text */
+  --red-500: #c1272d; /* tokens dark --red */
+  --red-600: #b42b30; /* tokens --red / --msg-err */
+  --red-700: #9a2429;
+  --red-800: #7e1d22;
+  --red-900: #63171b;
+  --red-950: #3a0d10;
   --amber-50: #fffbeb;
   --amber-100: #fef3c7;
   --amber-200: #fde68a;
-  --amber-300: #fcd34d;
+  --amber-300: #ffce6a; /* tokens dark --msg-warn */
   --amber-400: #fbbf24;
   --amber-500: #f59e0b;
   --amber-600: #d97706;
-  --amber-700: #b45309;
-  --amber-800: #92400e;
-  --amber-900: #78350f;
-  --amber-950: #451a03;
-  --brand-purple: #ab68ff;
-  --gizmo-gray-500: #999;
-  --gizmo-gray-600: #666;
-  --gizmo-gray-950: #0f0f0f;
+  --amber-700: #8a5a00; /* tokens --msg-warn */
+  --amber-800: #6d4700;
+  --amber-900: #513500;
+  --amber-950: #2b1c00;
+  /* brand accents. --panza-cta* are the CTA fills, --panza-link* the link colour;
+     the per-theme picks live in the html / .dark blocks below. */
+  --panza-cta: #1e56a0; /* tokens --cta */
+  --panza-cta-hover: #163f70; /* tokens --cta-hover */
+  --panza-cta-dark: #2a62be; /* tokens dark --cta */
+  --panza-cta-dark-hover: #4a8dff; /* tokens dark --cta-hover */
+  --panza-link: #1f5fd0; /* tokens --blue */
+  --panza-link-dark: #6aa0ff; /* tokens dark --blue */
+  --brand-purple: #1e56a0;
+  --gizmo-gray-500: #93876f;
+  --gizmo-gray-600: #4e5b68;
+  --gizmo-gray-950: #0f1d30;
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
@@ -67,35 +84,39 @@
   --markdown-font-size: 1rem;
 }
 html {
-  --brand-purple: #ab68ff;
-  --presentation: var(--white);
+  color-scheme: light;
+  --cta: var(--panza-cta);
+  --cta-hover: var(--panza-cta-hover);
+  --link: var(--panza-link);
+  --brand-purple: var(--cta);
+  --presentation: var(--gray-50);
   --text-primary: var(--gray-800);
   --text-secondary: var(--gray-600);
   --text-secondary-alt: var(--gray-500);
   --text-tertiary: var(--gray-500);
-  --text-warning: var(--amber-500);
+  --text-warning: var(--amber-700);
   --text-destructive: var(--red-600);
-  --ring-primary: var(--gray-500);
-  --header-primary: var(--white);
-  --header-hover: var(--gray-50);
-  --header-button-hover: var(--gray-50);
+  --ring-primary: var(--cta);
+  --header-primary: var(--gray-50);
+  --header-hover: var(--gray-100);
+  --header-button-hover: var(--gray-100);
   --surface-active: var(--gray-100);
   --surface-active-alt: var(--gray-200);
   --surface-hover: var(--gray-200);
   --surface-hover-alt: var(--gray-300);
-  --surface-primary: var(--white);
+  --surface-primary: var(--gray-50);
   --surface-primary-alt: var(--gray-50);
   --surface-primary-contrast: var(--gray-100);
-  --surface-secondary: var(--gray-50);
+  --surface-secondary: var(--gray-100);
   --surface-secondary-alt: var(--gray-200);
-  --surface-tertiary: var(--gray-100);
+  --surface-tertiary: var(--gray-20);
   --surface-tertiary-alt: var(--white);
   --surface-dialog: var(--white);
-  --surface-submit: var(--green-700);
-  --surface-submit-hover: var(--green-800);
+  --surface-submit: var(--cta);
+  --surface-submit-hover: var(--cta-hover);
   --surface-destructive: var(--red-700);
   --surface-destructive-hover: var(--red-800);
-  --surface-chat: var(--white);
+  --surface-chat: var(--gray-50);
   --border-light: var(--gray-200);
   --border-medium-alt: var(--gray-300);
   --border-medium: var(--gray-300);
@@ -104,40 +125,45 @@ html {
   --border-destructive: var(--red-600);
   /* These are test styles */
 
-  --background: 0 0% 100%;
-  --foreground: 0 0% 3.9%;
+  --background: 45 50% 96.9%;
+  --foreground: 214 45.5% 15.1%;
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 3.9%;
-  --primary: 0 0% 9%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 0 0% 96.1%;
-  --secondary-foreground: 0 0% 9%;
-  --muted: 0 0% 96.1%;
-  --muted-foreground: 0 0% 45.1%;
-  --accent: 0 0% 96.1%;
-  --accent-foreground: 0 0% 9%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 0 0% 89.8%;
-  --input: 0 0% 89.8%;
-  --ring: 0 0% 3.9%;
+  --card-foreground: 214 45.5% 15.1%;
+  --primary: 214 68.4% 37.3%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 41 36.4% 91.4%;
+  --secondary-foreground: 214 45.5% 15.1%;
+  --muted: 41 36.4% 91.4%;
+  --muted-foreground: 210 14.3% 35.7%;
+  --accent: 41 36.4% 91.4%;
+  --accent-foreground: 214 45.5% 15.1%;
+  --destructive: 358 61.4% 43.7%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 41 28.2% 84.7%;
+  --input: 41 28.2% 84.7%;
+  --ring: 214 68.4% 37.3%;
   --radius: 0.5rem;
   --chart-1: 12 76% 61%;
   --chart-2: 173 58% 39%;
   --chart-3: 197 37% 24%;
   --chart-4: 43 74% 66%;
   --chart-5: 27 87% 67%;
-  --switch-unchecked: 0 0% 58%;
+  --switch-unchecked: 40 14.3% 50.6%;
 }
 .dark {
-  --brand-purple: #ab68ff;
-  --presentation: var(--gray-800);
+  color-scheme: dark;
+  --cta: var(--panza-cta-dark);
+  --cta-hover: var(--panza-cta-dark-hover);
+  --link: var(--panza-link-dark);
+  --brand-purple: var(--cta);
+  --presentation: var(--gray-900);
   --text-primary: var(--gray-100);
   --text-secondary: var(--gray-300);
   --text-secondary-alt: var(--gray-400);
-  --text-tertiary: var(--gray-500);
-  --text-warning: var(--amber-500);
-  --text-destructive: var(--red-600);
+  --text-tertiary: var(--gray-400);
+  --text-warning: var(--amber-300);
+  --text-destructive: var(--red-400);
+  --ring-primary: var(--cta);
   --header-primary: var(--gray-700);
   --header-hover: var(--gray-600);
   --header-button-hover: var(--gray-700);
@@ -153,8 +179,8 @@ html {
   --surface-tertiary: var(--gray-700);
   --surface-tertiary-alt: var(--gray-700);
   --surface-dialog: var(--gray-850);
-  --surface-submit: var(--green-700);
-  --surface-submit-hover: var(--green-800);
+  --surface-submit: var(--cta);
+  --surface-submit-hover: var(--cta-hover);
   --surface-destructive: var(--red-800);
   --surface-destructive-hover: var(--red-900);
   --surface-chat: var(--gray-700);
@@ -166,29 +192,29 @@ html {
   --border-destructive: var(--red-500);
   /* These are test styles */
 
-  --background: 0 0% 7%;
-  --foreground: 0 0% 98%;
-  --card: 0 0% 3.9%;
-  --card-foreground: 0 0% 98%;
-  --primary: 0 0% 98%;
-  --primary-foreground: 0 0% 9%;
-  --secondary: 0 0% 14.9%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 0 0% 14.9%;
-  --muted-foreground: 0 0% 63.9%;
-  --accent: 0 0% 14.9%;
-  --accent-foreground: 0 0% 98%;
-  --destructive: 0 62.8% 40.6%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 0 0% 14.9%;
-  --input: 0 0% 14.9%;
-  --ring: 0 0% 83.1%;
+  --background: 215 56.5% 9%;
+  --foreground: 41 36.4% 91.4%;
+  --card: 215 52.4% 12.4%;
+  --card-foreground: 41 36.4% 91.4%;
+  --primary: 217 63.8% 45.5%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 214 45.5% 15.1%;
+  --secondary-foreground: 41 36.4% 91.4%;
+  --muted: 213 43.1% 20%;
+  --muted-foreground: 41 22.9% 72.5%;
+  --accent: 213 43.1% 20%;
+  --accent-foreground: 41 36.4% 91.4%;
+  --destructive: 357 62.1% 37.3%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 213 43.1% 20%;
+  --input: 213 43.1% 20%;
+  --ring: 217 63.8% 45.5%;
   --chart-1: 220 70% 50%;
   --chart-2: 160 60% 45%;
   --chart-3: 30 80% 55%;
   --chart-4: 280 65% 60%;
   --chart-5: 340 75% 55%;
-  --switch-unchecked: 0 0% 40%;
+  --switch-unchecked: 210 14.3% 35.7%;
 }
 .gizmo {
   --text-primary: var(--gizmo-gray-950);
@@ -216,15 +242,15 @@ html {
 }
 
 .text-token-text-primary {
-  color: #171717;
+  color: #152438;
   color: var(--text-primary);
 }
 .text-token-text-secondary {
-  color: #565869;
+  color: #33465a;
   color: var(--text-secondary);
 }
 .text-token-text-tertiary {
-  color: #8e8ea0;
+  color: #4e5b68;
   color: var(--text-tertiary);
 }
 
@@ -269,22 +295,22 @@ html {
 }
 
 .border-token-border-heavy {
-  border-color: #c5c5d2;
+  border-color: #93876f;
   border-color: var(--border-heavy);
 }
 
 .border-token-border-light {
-  border-color: #ececf1;
+  border-color: #e3dccd;
   border-color: var(--border-light);
 }
 
 .border-token-border-medium {
-  border-color: #d9d9e3;
+  border-color: #c9bfa9;
   border-color: var(--border-medium);
 }
 
 .border-token-surface-primary {
-  border-color: #fff;
+  border-color: #fbf9f3;
   border-color: var(--surface-primary);
 }
 
@@ -293,7 +319,7 @@ html {
 }
 
 .border-token-surface-tertiary {
-  border-color: #ececf1;
+  border-color: #f1ece1;
   border-color: var(--surface-tertiary);
 }
 
@@ -311,6 +337,93 @@ html {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* ai-aflat „Pânza” typography: Albert Sans for UI/body, Fraunces for display.
+   Both are self-hosted variable woff2 under `client/public/fonts` and are
+   deliberately NOT pulled from Google's font CDNs, which would ship a visitor's IP
+   to a third country on every page view (the website still does — see
+   docs/backlog/2026-07-28-selfhost-website-fonts-gdpr.md — that bug stops here).
+   Two cuts per family: `latin`, plus `latin-ext` where Romanian's comma-below
+   ș/ț and ă live. */
+@font-face {
+  font-display: swap;
+  font-family: 'Albert Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  src: url('$fonts/albert-sans-latin-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-display: swap;
+  font-family: 'Albert Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  src: url('$fonts/albert-sans-latin-ext-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-display: swap;
+  font-family: 'Albert Sans';
+  font-style: italic;
+  font-weight: 400 700;
+  src: url('$fonts/albert-sans-latin-italic.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-display: swap;
+  font-family: 'Albert Sans';
+  font-style: italic;
+  font-weight: 400 700;
+  src: url('$fonts/albert-sans-latin-ext-italic.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-display: swap;
+  font-family: Fraunces;
+  font-style: normal;
+  font-weight: 500 700;
+  src: url('$fonts/fraunces-latin-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-display: swap;
+  font-family: Fraunces;
+  font-style: normal;
+  font-weight: 500 700;
+  src: url('$fonts/fraunces-latin-ext-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Fraunces carries an `opsz` axis (9–144); optical sizing stays on so headings pick
+   up the display cut the way the website does. Element selectors only — every
+   `font-*` utility class outranks them, so a component can still opt out. */
+h1,
+h2,
+h3 {
+  font-family: Fraunces, Georgia, 'Times New Roman', serif;
+  letter-spacing: -0.01em;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-optical-sizing: auto;
 }
 
 @font-face {
@@ -709,7 +822,7 @@ pre {
   padding: 0;
   border-radius: 50%;
   border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(21, 36, 56, 0.12);
   background-color: #ffffff;
   z-index: 10;
   overflow: hidden;
@@ -718,8 +831,8 @@ pre {
 
 .dark .premium-scroll-button {
   border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  background-color: #2a2a2e;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  background-color: #1d3149;
 }
 
 .scroll-animation-enter-active .premium-scroll-button {
@@ -1004,35 +1117,35 @@ pre {
   vertical-align: top;
 }
 .prose {
-  --tw-prose-body: #424242;
-  --tw-prose-headings: #111827;
-  --tw-prose-lead: #4b5563;
-  --tw-prose-links: #0066cc;
-  --tw-prose-bold: #111827;
-  --tw-prose-counters: #6b7280;
-  --tw-prose-bullets: #d1d5db;
-  --tw-prose-hr: #cdcdcd;
-  --tw-prose-quotes: #111827;
-  --tw-prose-quote-borders: #e5e7eb;
-  --tw-prose-captions: #6b7280;
-  --tw-prose-code: #111827;
-  --tw-prose-pre-code: #e5e7eb;
-  --tw-prose-pre-bg: #1f2937;
-  --tw-prose-th-borders: #d1d5db;
-  --tw-prose-td-borders: #e5e7eb;
-  --tw-prose-invert-body: #d1d5db;
-  --tw-prose-invert-headings: #fff;
-  --tw-prose-invert-lead: #9ca3af;
-  --tw-prose-invert-links: #fff;
-  --tw-prose-invert-bold: #fff;
-  --tw-prose-invert-counters: #9ca3af;
-  --tw-prose-invert-bullets: #4b5563;
-  --tw-prose-invert-hr: #424242;
-  --tw-prose-invert-quotes: #f3f4f6;
-  --tw-prose-invert-quote-borders: #424242;
-  --tw-prose-invert-captions: #9ca3af;
-  --tw-prose-invert-code: #fff;
-  --tw-prose-invert-pre-code: #d1d5db;
+  --tw-prose-body: #33465a;
+  --tw-prose-headings: #152438;
+  --tw-prose-lead: #4e5b68;
+  --tw-prose-links: #1f5fd0;
+  --tw-prose-bold: #152438;
+  --tw-prose-counters: #4e5b68;
+  --tw-prose-bullets: #c9bfa9;
+  --tw-prose-hr: #e3dccd;
+  --tw-prose-quotes: #152438;
+  --tw-prose-quote-borders: #e3dccd;
+  --tw-prose-captions: #4e5b68;
+  --tw-prose-code: #152438;
+  --tw-prose-pre-code: #e3dccd;
+  --tw-prose-pre-bg: #152438;
+  --tw-prose-th-borders: #c9bfa9;
+  --tw-prose-td-borders: #e3dccd;
+  --tw-prose-invert-body: #c9bfa9;
+  --tw-prose-invert-headings: #f1ece1;
+  --tw-prose-invert-lead: #93876f;
+  --tw-prose-invert-links: #6aa0ff;
+  --tw-prose-invert-bold: #f1ece1;
+  --tw-prose-invert-counters: #93876f;
+  --tw-prose-invert-bullets: #4e5b68;
+  --tw-prose-invert-hr: #1d3149;
+  --tw-prose-invert-quotes: #f1ece1;
+  --tw-prose-invert-quote-borders: #1d3149;
+  --tw-prose-invert-captions: #93876f;
+  --tw-prose-invert-code: #f1ece1;
+  --tw-prose-invert-pre-code: #c9bfa9;
   --tw-prose-invert-pre-bg: rgba(0, 0, 0, 0.5);
   --tw-prose-invert-th-borders: #4b5563;
   --tw-prose-invert-td-borders: #424242;
