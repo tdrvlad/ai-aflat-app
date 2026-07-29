@@ -651,3 +651,51 @@ Rule: every deviation from upstream = one line here, same commit.
     a reship before it reaches production. `packages/client/src/theme/themes/{default,dark}.ts`
     still carry upstream's RGB triples — they are dead code in this fork (nothing imports
     `applyTheme`), so they were left alone rather than forked into a second source of truth.
+
+- **Sidebar ground restored after the Pânza remap (committed):** reported as "the chat history
+  sidebar is gone". It was never gone — nothing in this fork ever removed, gated or unmounted it,
+  and none of the `interface:` flags can. `<UnifiedSidebar />` is mounted unconditionally in the
+  authed shell (`client/src/routes/Root.tsx:97`) and the conversation-history panel is prepended
+  *outside* `useSideNavLinks` in `client/src/hooks/Nav/useUnifiedSidebarLinks.ts:52-62`, so
+  `modelSelect` / `presets` / `prompts` / `bookmarks` / `multiConvo` / `agents` — which only ever
+  feed `useSideNavLinks` — cannot take it away. `git diff bf57ffcb0..HEAD` over
+  `components/{UnifiedSidebar,Nav,SidePanel,Conversations}`, `hooks/Nav` and `routes/Root.tsx`
+  is the About restyle, one locale selector line, and the additive `ConsentModal` mount.
+  - What actually broke is a **light-theme token collapse** introduced by the identity commit.
+    Moving `--presentation` / `--surface-primary` / `--surface-chat` onto the linen ground put them
+    on `--gray-50`, which is exactly what `--surface-primary-alt` — the sidebar's own ground
+    (`UnifiedSidebar.tsx`, `Sidebar.tsx`, `ExpandedPanel.tsx`, and `ConvoLink`'s title fade mask) —
+    already was. Sidebar-against-chat went to **1.000:1** and there is no border at that seam, so
+    the panel stopped existing as a surface: conversation titles floated on the same linen as the
+    chat, and with an empty history there was nothing to see at all. This is the same class of
+    collapse the entry above caught for `--surface-secondary`/`--surface-tertiary`;
+    `--surface-primary-alt` was missed because it did not itself change.
+  - Fix is **one token**: light `--surface-primary-alt` `--gray-50` → `--gray-100` (flax, the ramp's
+    documented "raised beige band"). Browser-computed against the built CSS: sidebar
+    `rgb(241,236,225)` vs chat `rgb(251,249,243)` = **1.12:1**, where upstream's `#f7f7f8`-on-white
+    seam was 1.07:1. The active-conversation highlight stays `--surface-active-alt` `#e3dccd`, still
+    distinct from the new ground. **Dark was never affected** (`#0f1d30` on `#0a1524` = 1.08:1,
+    matching upstream's 1.08:1) and was left alone. No config flag was changed — the deliberate
+    suppressions all stand.
+  - `client/src/components/UnifiedSidebar/Sidebar.tsx`: the expanded `<nav>` gained
+    `border-r border-border-light`. The icon strip already carried its own right border, so the
+    sidebar's *outer* edge had none; with both grounds now inside one warm ramp a hairline is what
+    makes the seam unambiguous. It fades with the nav, so the collapsed strip still shows exactly
+    one border.
+  - Tests: `client/src/components/UnifiedSidebar/__tests__/ConversationsPanel.spec.tsx` (7 cases).
+    Three pin the mount — the conversations link is first even when `useSideNavLinks` yields only
+    the unconditional files panel, the real `SidePanelNav` mounts it by default, and
+    `resolveActivePanel` falls back to it when `localStorage` still points at a panel our flags
+    removed (a real stale-state path, since `side:active-panel` outlives a config change). Four
+    parse `style.css` and assert, per theme, that `--surface-primary-alt` differs from
+    `--presentation` / `--surface-primary` / `--surface-chat` and that `--surface-active-alt`
+    differs from it. Verified by mutation: restoring `--gray-50` fails the light case only.
+  - Unrelated observation, not introduced here:
+    `client/src/components/Skills/dialogs/__tests__/UploadSkillDialog.spec.tsx` is
+    run-order-fragile. Its three `container.querySelector('input[type=file]')` cases failed in some
+    full-suite runs once a 234th suite shifted jest's sequencing, and passed in others (including
+    cold-cache) with the identical tree; adding an inert probe suite, or a one-line edit to that
+    spec, flips it either way. The two `screen.getByText` cases never fail, which points at its
+    `jest.mock('@librechat/client', …, { virtual: true })` intermittently not applying, so the real
+    Radix `OGDialog` portals out of `container`. Not touched — Skills is a surface this deployment
+    disables.

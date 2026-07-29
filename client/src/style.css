@@ -105,7 +105,13 @@ html {
   --surface-hover: var(--gray-200);
   --surface-hover-alt: var(--gray-300);
   --surface-primary: var(--gray-50);
-  --surface-primary-alt: var(--gray-50);
+  /* The sidebar ground (UnifiedSidebar + ConvoLink's fade mask). It must NOT equal
+     --presentation / --surface-primary / --surface-chat: moving those onto the linen
+     ground collapsed this token onto them at exactly 1.000:1, and the conversation-
+     history panel stopped reading as a panel at all. Flax is the ramp's documented
+     "raised beige band", which puts the panel 1.12:1 off the chat ground — upstream's
+     #f7f7f8-on-white seam was 1.07:1. Keep it off --gray-50. */
+  --surface-primary-alt: var(--gray-100);
   --surface-primary-contrast: var(--gray-100);
   --surface-secondary: var(--gray-100);
   --surface-secondary-alt: var(--gray-200);
