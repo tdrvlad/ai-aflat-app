@@ -749,3 +749,30 @@ Rule: every deviation from upstream = one line here, same commit.
     install does not have — and its `rimraf dist` runs first, so a failed build leaves the package
     with no `dist` and every consumer broken. Fixed locally by dropping `unrun@0.3.1` into
     `node_modules/` (no `package.json` / lockfile change) and building under node v24.16.0.
+
+### 2026-07-29 — `--surface-active` collision (light theme)
+
+A token sweep across all 50 semantic surface/text/border custom properties, in both themes, found
+`--surface-active` resolving to the same `#f1ece1` as `--surface-secondary`,
+`--surface-primary-alt`, `--surface-primary-contrast`, `--header-hover` and `--header-button-hover`.
+
+Two of those were reachable defects, both light-theme only:
+
+- `ui/TermsAndConditionsModal.tsx:92` — `bg-surface-secondary hover:bg-surface-active`: no hover.
+- `Chat/Input/MentionItem.tsx:37` — `hover:bg-surface-secondary active:bg-surface-active`: no press
+  feedback.
+
+Same root cause as the sidebar regression earlier the same day, one domino further along. Upstream
+light ran `secondary(gray-50) → active(gray-100) → hover(gray-200)`. The Pânza restyle moved
+`--surface-secondary` from `gray-50` to `gray-100` — necessary, because `gray-50` had become the
+linen ground under `--surface-primary` — and that landed it exactly on `--surface-active`.
+
+Fixed by moving light `--surface-active` to `var(--gray-200)`. Safe: `--surface-active` is used
+**only** behind an interaction modifier (`hover:` / `active:`) — 2 occurrences, zero resting-state
+uses — so nothing changes at rest. Dark was never affected (`gray-500` #4e5b68 vs secondary
+`gray-800` #152438). `--surface-active-alt` (25 uses, the sidebar's row hover) was already correct
+at `gray-200` and is untouched.
+
+**Standing hazard for anyone re-theming this fork:** collapsing two semantic tokens onto one value
+is invisible to the test suite and can be invisible in one theme only. Sweep the computed values,
+don't read the class names.

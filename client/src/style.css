@@ -100,7 +100,12 @@ html {
   --header-primary: var(--gray-50);
   --header-hover: var(--gray-100);
   --header-button-hover: var(--gray-100);
-  --surface-active: var(--gray-100);
+  /* One step below --surface-secondary, never equal to it. Upstream ran
+     secondary(gray-50) → active(gray-100) → hover(gray-200); moving secondary up to
+     gray-100 to keep it off the linen ground landed it exactly on active, so every
+     `bg-surface-secondary hover:bg-surface-active` element lost its hover and
+     `active:bg-surface-active` lost its press feedback — invisible in light only. */
+  --surface-active: var(--gray-200);
   --surface-active-alt: var(--gray-200);
   --surface-hover: var(--gray-200);
   --surface-hover-alt: var(--gray-300);
