@@ -30,7 +30,7 @@ registration:
     - 'sapio.ro'
 
 interface:
-  customWelcome: 'Întreabă despre legislația din România. Răspunsurile vin cu sursa lângă ele.'
+  customWelcome: 'Întreabă orice despre legislația din România. Răspunsurile vin cu sursa lângă ele.'
   privacyPolicy:
     externalUrl: 'https://ai-aflat.ro/confidentialitate'
     openNewTab: true

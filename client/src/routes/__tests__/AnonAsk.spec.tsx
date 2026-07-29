@@ -41,7 +41,7 @@ describe('AnonAsk (/ask)', () => {
   it('renders the heading, the framing sub-line and the starter chips', () => {
     render(<AnonAsk />);
 
-    expect(screen.getByRole('heading', { name: 'Ask about Romanian legislation' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Ask anything about Romanian legislation' })).toBeVisible();
     expect(screen.getByText(/direct link to the article of law/i)).toBeVisible();
     expect(screen.getByRole('group', { name: 'Example questions' })).toBeVisible();
   });
