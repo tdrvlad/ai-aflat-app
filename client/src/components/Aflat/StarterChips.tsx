@@ -1,3 +1,4 @@
+import { ArrowRight } from 'lucide-react';
 import { useLocalize } from '~/hooks';
 import type { TranslationKeys } from '~/hooks';
 
@@ -10,6 +11,10 @@ const STARTER_KEYS: TranslationKeys[] = [
 /**
  * Example questions. They only fill the composer — sending stays an explicit
  * act, because the send is what parks the question server-side.
+ *
+ * Laid out as a vertical list rather than wrapped chips: on a phone these are
+ * the dominant element under the composer, and a full-width row is both a
+ * bigger touch target and easier to scan than a ragged two-line wrap.
  */
 export default function StarterChips({ onPick }: { onPick: (text: string) => void }) {
   const localize = useLocalize();
@@ -18,7 +23,7 @@ export default function StarterChips({ onPick }: { onPick: (text: string) => voi
     <div
       role="group"
       aria-label={localize('com_aflat_starters_label')}
-      className="mt-2 flex w-full flex-wrap items-stretch justify-center gap-2 px-4"
+      className="mt-3 flex w-full flex-col gap-2 px-4"
     >
       {STARTER_KEYS.map((key, index) => {
         const text = localize(key);
@@ -27,10 +32,14 @@ export default function StarterChips({ onPick }: { onPick: (text: string) => voi
             key={key}
             type="button"
             onClick={() => onPick(text)}
-            style={{ animationDelay: `${index * 75}ms`, animationFillMode: 'backwards' }}
-            className="flex max-w-[16rem] cursor-pointer items-center justify-center rounded-2xl border border-border-medium bg-surface-secondary px-4 py-2.5 text-center text-sm text-text-secondary shadow-sm transition-colors duration-200 fade-in hover:border-border-heavy hover:bg-surface-tertiary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
+            style={{ animationDelay: `${index * 45}ms` }}
+            className="aa-rise-slow flex min-h-[52px] w-full cursor-pointer items-center justify-between gap-3 rounded-2xl border border-border-light bg-surface-secondary px-4 py-3 text-left transition-colors duration-150 hover:border-border-heavy hover:bg-surface-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary motion-reduce:transition-none"
           >
-            <span className="line-clamp-2 text-balance break-words">{text}</span>
+            <span className="text-sm leading-snug text-text-primary">{text}</span>
+            <ArrowRight
+              aria-hidden="true"
+              className="h-[15px] w-[15px] shrink-0 text-text-tertiary"
+            />
           </button>
         );
       })}

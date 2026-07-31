@@ -20,6 +20,7 @@ import dashboardRoutes from './Dashboard';
 import ShareRoute from './ShareRoute';
 import ChatRoute from './ChatRoute';
 import AnonAsk from './AnonAsk';
+import Welcome from './Welcome';
 import Search from './Search';
 import Root from './Root';
 
@@ -60,6 +61,17 @@ export const router = createBrowserRouter(
     {
       path: 'share/:shareId',
       element: <ShareRoute />,
+      errorElement: <RouteErrorBoundary />,
+    },
+    {
+      /**
+       * ai-aflat: where an unauthenticated visitor lands. Says what the product is
+       * and states the legal-information framing before anything is asked, so the
+       * framing no longer has to interrupt the first send. Same standalone
+       * treatment as `/ask` — no session, no auth context.
+       */
+      path: 'welcome',
+      element: <Welcome />,
       errorElement: <RouteErrorBoundary />,
     },
     {

@@ -3086,3 +3086,109 @@ html {
 .sharepoint-picker-bg {
   background-color: #f5f5f5;
 }
+
+/* ------------------------------------------------------------------------
+   ai-aflat „Pânza” — design-system primitives
+   From the approved Claude Design prototype (docs/superpowers/specs/
+   2026-07-31-app-uiux-scope.md). Colour still resolves through the semantic
+   tokens above; the only additions here are the two Pânza values LibreChat
+   has no equivalent for — the running stitch and the viewer highlight — plus
+   the motion the spec names. Nothing here hardcodes a component colour.
+   ------------------------------------------------------------------------ */
+html {
+  --stitch: rgba(180, 43, 48, 0.55);
+  --panza-hl: rgba(180, 43, 48, 0.14);
+  /* The folk field. Burgundy on linen, warm beige on the night ground — the
+     motif is a mask, so the colour has to flip with the theme or it disappears
+     into a dark background. Kept at watermark strength, never wallpaper. */
+  --motif: rgba(150, 44, 51, 0.18);
+}
+.dark {
+  --stitch: rgba(214, 69, 74, 0.6);
+  --panza-hl: rgba(226, 100, 106, 0.16);
+  --motif: rgba(224, 208, 170, 0.144);
+}
+
+/* The smallest recurring signature of the identity: a red running stitch used
+   instead of a plain rule. `aa-stitch` is the horizontal divider, `aa-stitch-dash`
+   the short leading dash that replaces a list bullet. */
+.aa-stitch {
+  height: 2px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--stitch) 0 7px,
+    transparent 7px 13px
+  );
+}
+.aa-stitch-dash {
+  height: 2px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--stitch) 0 5px,
+    transparent 5px 9px
+  );
+}
+
+/* Motion. Durations/easings per the spec's timing table; every one of these is
+   disabled wholesale by the prefers-reduced-motion block at the end. */
+@keyframes aa-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes aa-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes aa-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+.aa-rise {
+  animation: aa-rise 240ms ease-out both;
+}
+.aa-rise-slow {
+  animation: aa-rise 400ms ease-out both;
+}
+.aa-pulse {
+  animation: aa-pulse 1.2s ease-in-out infinite;
+}
+.aa-blink {
+  animation: aa-blink 1s steps(1, end) infinite;
+}
+
+/* Streaming cursor — content, not decoration, so it keeps its box under
+   reduced motion and only loses the blink. */
+.aa-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: -3px;
+  background: var(--text-destructive);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aa-rise,
+  .aa-rise-slow,
+  .aa-pulse,
+  .aa-blink {
+    animation: none !important;
+  }
+}

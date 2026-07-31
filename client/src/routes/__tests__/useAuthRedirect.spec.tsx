@@ -47,9 +47,9 @@ const createTestRouter = (basename = '/', initialEntry?: string) => {
         element: <div data-testid="login-page">Login Page</div>,
       },
       {
-        /** ai-aflat: unauthenticated visitors land on the public ask gate */
-        path: '/ask',
-        element: <div data-testid="anon-ask-page">Anon Ask Page</div>,
+        /** ai-aflat: unauthenticated visitors land on the welcome screen */
+        path: '/welcome',
+        element: <div data-testid="welcome-page">Welcome Page</div>,
       },
       {
         path: '/c/:id',
@@ -93,7 +93,7 @@ describe('useAuthRedirect', () => {
     expect(getByTestId('test-component')).toBeInTheDocument();
   });
 
-  it('should redirect to /ask when user is not authenticated', async () => {
+  it('should redirect to /welcome when user is not authenticated', async () => {
     (useAuthContext as jest.Mock).mockReturnValue({
       user: null,
       isAuthenticated: false,
@@ -108,8 +108,8 @@ describe('useAuthRedirect', () => {
     // Wait for the redirect to happen (300ms timeout + navigation)
     await waitFor(
       () => {
-        expect(router.state.location.pathname).toBe('/ask');
-        expect(getByTestId('anon-ask-page')).toBeInTheDocument();
+        expect(router.state.location.pathname).toBe('/welcome');
+        expect(getByTestId('welcome-page')).toBeInTheDocument();
         expect(queryByTestId('test-component')).not.toBeInTheDocument();
       },
       { timeout: 1000 },
@@ -137,13 +137,13 @@ describe('useAuthRedirect', () => {
     await waitFor(
       () => {
         // Router state pathname includes the full path with basename
-        expect(router.state.location.pathname).toBe('/librechat/ask');
-        expect(getByTestId('anon-ask-page')).toBeInTheDocument();
+        expect(router.state.location.pathname).toBe('/librechat/welcome');
+        expect(getByTestId('welcome-page')).toBeInTheDocument();
       },
       { timeout: 1000 },
     );
 
-    // The key point: navigate('/ask', { replace: true }) works correctly with basename
+    // The key point: navigate('/welcome', { replace: true }) works correctly with basename
     // The router automatically prepends the basename to create the full URL
     expect(router.state.historyAction).toBe('REPLACE');
   });
@@ -159,8 +159,8 @@ describe('useAuthRedirect', () => {
 
     await waitFor(
       () => {
-        expect(router.state.location.pathname).toBe('/librechat/ask');
-        expect(getByTestId('anon-ask-page')).toBeInTheDocument();
+        expect(router.state.location.pathname).toBe('/librechat/welcome');
+        expect(getByTestId('welcome-page')).toBeInTheDocument();
       },
       { timeout: 1000 },
     );
@@ -168,7 +168,7 @@ describe('useAuthRedirect', () => {
     // The fact that navigation worked within the router proves we're using
     // navigate() and not window.location.href (which would cause a full reload
     // and break the test entirely). This maintains the SPA experience.
-    expect(router.state.location.pathname).toBe('/librechat/ask');
+    expect(router.state.location.pathname).toBe('/librechat/welcome');
   });
 
   it('should clear timeout on unmount', async () => {
@@ -227,7 +227,7 @@ describe('useAuthRedirect', () => {
 
     await waitFor(
       () => {
-        expect(router.state.location.pathname).toBe('/ask');
+        expect(router.state.location.pathname).toBe('/welcome');
       },
       { timeout: 1000 },
     );
@@ -247,7 +247,7 @@ describe('useAuthRedirect', () => {
 
     await waitFor(
       () => {
-        expect(router.state.location.pathname).toBe('/librechat/ask');
+        expect(router.state.location.pathname).toBe('/librechat/welcome');
       },
       { timeout: 1000 },
     );
