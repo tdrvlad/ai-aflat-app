@@ -71,29 +71,48 @@ endpoints:
         # resolves to `AgentClient.responseMessageId` — see packages/api/src/aflat/sources.ts.
         x-aflat-response-message-id: '{{LIBRECHAT_BODY_MESSAGEID}}'
       models:
-        default: ['simple-search', 'deep-search']
+        default: ['simple-search', 'standard-search', 'deep-search']
         fetch: false
       titleConvo: false
       modelDisplayLabel: 'ai-aflat'
+      # The orchestrator narrates its retrieval stages on `reasoning_content`, which is
+      # what makes the thinking panel render distinct stage headers instead of one blob.
+      # `reasoningFormat: disabled` is about the *request*: the engine takes its effort
+      # from the model id (see modelSpecs below), so the fork must not also send a
+      # `reasoning_effort` / `reasoning` parameter of its own.
+      # Keys verified against `customParams` in packages/data-provider/src/config.ts,
+      # which is `.strict()` — nothing outside that object validates.
+      customParams:
+        reasoningKey: 'reasoning_content'
+        reasoningFormat: 'disabled'
 
-# The two search modes. Model *ids* are English (they are code identifiers, shared verbatim
-# with the orchestrator); the Romanian the user reads lives only in `label`. Schema verified
-# against packages/data-provider/src/models.ts (`specsConfigSchema` / `tModelSpecSchema`) in
-# this v0.8.7 tree, not from docs.
+# The three search modes, one per effort level the engine actually takes (low | medium | high).
+# Two ids used to be exposed, which left `medium` — the intended default and the middle rung of
+# the price ladder — unreachable. Model *ids* are English (they are code identifiers, shared
+# verbatim with the orchestrator, which maps id → effort on its side); the Romanian the user
+# reads lives only in `label`. Schema verified against packages/data-provider/src/models.ts
+# (`specsConfigSchema` / `tModelSpecSchema`) in this v0.8.7 tree, not from docs.
 # `enforce` is left at its schema default (false): enforcing would require every send to carry
 # a spec, and nothing outside the picker does yet.
+# The Romanian labels are provisional — they still need a register pass before ship.
 modelSpecs:
   prioritize: true
   list:
     - name: 'simple-search'
-      label: 'Căutare simplă'
-      default: true
+      label: 'Rapid'
       preset:
         endpoint: 'ai-aflat'
         model: 'simple-search'
 
+    - name: 'standard-search'
+      label: 'Normal'
+      default: true
+      preset:
+        endpoint: 'ai-aflat'
+        model: 'standard-search'
+
     - name: 'deep-search'
-      label: 'Căutare aprofundată'
+      label: 'Aprofundat'
       preset:
         endpoint: 'ai-aflat'
         model: 'deep-search'

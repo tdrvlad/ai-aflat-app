@@ -101,6 +101,59 @@ describe('SOURCES content part persistence', () => {
     );
   });
 
+  /**
+   * The renderer groups by act, so the grouping has to survive a reload too — an
+   * answer that came back act-grouped and reloads as a flat list is a regression
+   * the round-trip above would not catch.
+   */
+  it('round-trips the act grouping, provisions and viewer links included', async () => {
+    const grouped: TMessageContentParts = {
+      type: ContentTypes.SOURCES,
+      sources: sourcesPart.sources,
+      sources_by_act: [
+        {
+          act_id: 41627,
+          act_title: 'CODUL MUNCII din 24 ianuarie 2003 ( Legea nr. 53/2003 )',
+          url: 'https://legislatie.just.ro/Public/DetaliiDocument/41627',
+          viewer_url: 'https://legislatie.ai-aflat.ro/viewer/41627',
+          in_force: true,
+          likely_amending: false,
+          cited: true,
+          provisions: [
+            {
+              ref: 'S1',
+              entity_id: '41627:id_artA620:132816:136035',
+              entity_type: 'provision',
+              act_id: 41627,
+              title: 'art. 78–81',
+              path: 'Titlul II › Capitolul V',
+              anchor: 'id_artA620',
+              why: 'Codul muncii › Titlul II › Capitolul V — matched: concedier, preaviz',
+              viewer_url: 'https://legislatie.ai-aflat.ro/viewer/41627?a=id_artA620',
+              in_force: true,
+              rank: 1,
+              cited: false,
+            },
+          ],
+        },
+      ],
+    };
+
+    await methods.saveMessage(
+      { userId },
+      {
+        messageId: uuidv4(),
+        conversationId,
+        user: userId,
+        isCreatedByUser: false,
+        content: [{ type: ContentTypes.TEXT, text: 'Răspuns.' }, grouped],
+      },
+    );
+
+    const [reloaded] = await methods.getMessages({ conversationId, user: userId });
+    expect(reloaded.content?.[1]).toEqual(grouped);
+  });
+
   it('keeps the citation part last, under the answer text', async () => {
     await methods.saveMessage(
       { userId },

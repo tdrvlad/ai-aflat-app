@@ -129,7 +129,7 @@ const Part = memo(function Part({
     if (!Array.isArray(sources)) {
       return null;
     }
-    return <Sources sources={sources} />;
+    return <Sources sources={sources} sourcesByAct={part.sources_by_act} />;
   } else if (part.type === ContentTypes.SUMMARY) {
     return (
       <Summary

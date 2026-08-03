@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { ContentTypes } from 'librechat-data-provider';
 import type { AddressInfo } from 'node:net';
 import type { Server, IncomingMessage, ServerResponse } from 'node:http';
-import type { TAflatSource } from 'librechat-data-provider';
+import type { TAflatSource, TAflatSourceAct } from 'librechat-data-provider';
 import type { AppConfig } from '@librechat/data-schemas';
 import { resolveHeaders } from '~/utils/env';
 import {
@@ -72,6 +72,48 @@ const realSource: TAflatSource = {
   cited: true,
 };
 
+/**
+ * Every field the live orchestrator emits per source, copied from a real probe on
+ * 2026-08-04 (`POST /v1/chat/completions` then `GET /v1/messages/{id}/sources`).
+ * If the seam ever narrows again, this fixture is what catches it.
+ */
+const measuredSource: TAflatSource = {
+  ref: 'S1',
+  entity_id: '41627:id_artA620:132816:136035',
+  entity_type: 'provision',
+  act_id: 41627,
+  act_title: 'CODUL MUNCII din 24 ianuarie 2003 (**republicat**) ( Legea nr. 53/2003 )',
+  title: 'art. 78–81',
+  article_first: '78',
+  article_last: '81',
+  path: 'Titlul II › Capitolul V',
+  anchor: 'id_artA620',
+  snippet: 'Articolul 78 Concedierea dispusă cu nerespectarea procedurii…',
+  why: 'Codul muncii › Titlul II › Capitolul V — matched: termen, preaviz, concedier',
+  url: 'https://legislatie.just.ro/Public/DetaliiDocument/41627',
+  viewer_url: 'https://legislatie.ai-aflat.ro/viewer/41627?a=id_artA620',
+  in_force: true,
+  legdb_status: 'ACTIVE',
+  band: 'A+',
+  rank: 1,
+  degraded: 'rerank_budget_exhausted',
+  likely_amending: false,
+  cited: false,
+};
+
+const measuredAct: TAflatSourceAct = {
+  act_id: 41627,
+  act_title: 'CODUL MUNCII din 24 ianuarie 2003 (**republicat**) ( Legea nr. 53/2003 )',
+  url: 'https://legislatie.just.ro/Public/DetaliiDocument/41627',
+  viewer_url: 'https://legislatie.ai-aflat.ro/viewer/41627',
+  in_force: true,
+  legdb_status: 'ACTIVE',
+  band: 'A+',
+  likely_amending: false,
+  cited: true,
+  provisions: [measuredSource],
+};
+
 const appConfigFor = (baseURL: string, apiKey = 'test-key'): AppConfig =>
   ({
     endpoints: {
@@ -123,14 +165,14 @@ describe('fetchAflatSources', () => {
   it('returns the orchestrator payload verbatim, URL untouched', async () => {
     orchestrator.json({ job_id: 'job-1', query_id: 'q-1', sources: [realSource] });
 
-    const sources = await fetchAflatSources({
+    const payload = await fetchAflatSources({
       baseURL: orchestrator.baseURL,
       apiKey: 'test-key',
       responseMessageId: 'msg-1',
     });
 
-    expect(sources).toEqual([realSource]);
-    expect(sources[0].url).toBe(realSource.url);
+    expect(payload).toEqual({ sources: [realSource] });
+    expect(payload.sources[0].url).toBe(realSource.url);
   });
 
   it('authenticates with the orchestrator API key and hits the message route', async () => {
@@ -156,7 +198,7 @@ describe('fetchAflatSources', () => {
         apiKey: 'test-key',
         responseMessageId: 'msg-2',
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ sources: [] });
   });
 
   it('returns an empty list on 404 (no job for this message)', async () => {
@@ -168,7 +210,7 @@ describe('fetchAflatSources', () => {
         apiKey: 'test-key',
         responseMessageId: 'missing',
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ sources: [] });
   });
 
   it('returns an empty list on a server error rather than throwing', async () => {
@@ -180,7 +222,7 @@ describe('fetchAflatSources', () => {
         apiKey: 'test-key',
         responseMessageId: 'msg-3',
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ sources: [] });
   });
 
   it('returns an empty list when the orchestrator is unreachable', async () => {
@@ -190,7 +232,7 @@ describe('fetchAflatSources', () => {
 
     await expect(
       fetchAflatSources({ baseURL, apiKey: 'test-key', responseMessageId: 'msg-4' }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ sources: [] });
   });
 
   it('drops fields it does not recognise and entries that are not objects', async () => {
@@ -203,7 +245,7 @@ describe('fetchAflatSources', () => {
       ],
     });
 
-    const sources = await fetchAflatSources({
+    const { sources } = await fetchAflatSources({
       baseURL: orchestrator.baseURL,
       apiKey: 'test-key',
       responseMessageId: 'msg-5',
@@ -217,7 +259,7 @@ describe('fetchAflatSources', () => {
   it('omits a non-string url instead of repairing it', async () => {
     orchestrator.json({ sources: [{ ...realSource, url: { href: 'https://example.com' } }] });
 
-    const sources = await fetchAflatSources({
+    const { sources } = await fetchAflatSources({
       baseURL: orchestrator.baseURL,
       apiKey: 'test-key',
       responseMessageId: 'msg-6',
@@ -225,6 +267,84 @@ describe('fetchAflatSources', () => {
 
     expect(sources).toHaveLength(1);
     expect(sources[0].url).toBeUndefined();
+  });
+
+  it('carries every field the live orchestrator emits, unchanged', async () => {
+    orchestrator.json({ job_id: 'job-4', query_id: 'q-4', sources: [measuredSource] });
+
+    const { sources } = await fetchAflatSources({
+      baseURL: orchestrator.baseURL,
+      apiKey: 'test-key',
+      responseMessageId: 'msg-live',
+    });
+
+    expect(sources).toEqual([measuredSource]);
+    expect(Object.keys(sources[0]).sort()).toEqual(Object.keys(measuredSource).sort());
+  });
+
+  it('carries the act grouping, provisions and all', async () => {
+    orchestrator.json({ sources: [measuredSource], sources_by_act: [measuredAct] });
+
+    const payload = await fetchAflatSources({
+      baseURL: orchestrator.baseURL,
+      apiKey: 'test-key',
+      responseMessageId: 'msg-by-act',
+    });
+
+    expect(payload.sources_by_act).toEqual([measuredAct]);
+    expect(payload.sources_by_act?.[0].provisions[0].viewer_url).toBe(measuredSource.viewer_url);
+  });
+
+  it('drops an act group with no usable provisions rather than rendering an empty card', async () => {
+    orchestrator.json({
+      sources: [measuredSource],
+      sources_by_act: [
+        { ...measuredAct, provisions: ['not-an-object', null] },
+        { ...measuredAct, provisions: 'nope' },
+      ],
+    });
+
+    const payload = await fetchAflatSources({
+      baseURL: orchestrator.baseURL,
+      apiKey: 'test-key',
+      responseMessageId: 'msg-empty-act',
+    });
+
+    expect(payload.sources_by_act).toBeUndefined();
+  });
+
+  it('omits a viewer_url that is not an absolute http(s) address instead of repairing it', async () => {
+    orchestrator.json({
+      sources: [
+        { ...measuredSource, viewer_url: '/viewer/41627?a=id_artA620' },
+        { ...measuredSource, ref: 'S2', viewer_url: 'javascript:alert(1)' },
+        { ...measuredSource, ref: 'S3', url: 'legislatie.just.ro/Public/DetaliiDocument/41627' },
+      ],
+    });
+
+    const { sources } = await fetchAflatSources({
+      baseURL: orchestrator.baseURL,
+      apiKey: 'test-key',
+      responseMessageId: 'msg-bad-urls',
+    });
+
+    expect(sources[0].viewer_url).toBeUndefined();
+    expect(sources[1].viewer_url).toBeUndefined();
+    expect(sources[2].url).toBeUndefined();
+    expect(sources[0].url).toBe(measuredSource.url);
+  });
+
+  it('drops an anchor that is not a string rather than inventing one', async () => {
+    orchestrator.json({ sources: [{ ...measuredSource, anchor: 620, act_id: '41627' }] });
+
+    const { sources } = await fetchAflatSources({
+      baseURL: orchestrator.baseURL,
+      apiKey: 'test-key',
+      responseMessageId: 'msg-anchor',
+    });
+
+    expect(sources[0].anchor).toBeUndefined();
+    expect(sources[0].act_id).toBeUndefined();
   });
 
   it('returns an empty list when the payload has no sources array', async () => {
@@ -236,20 +356,36 @@ describe('fetchAflatSources', () => {
         apiKey: 'test-key',
         responseMessageId: 'msg-7',
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ sources: [] });
   });
 });
 
 describe('buildAflatSourcesPart', () => {
   it('builds the SOURCES content part the renderer dispatches on', () => {
-    expect(buildAflatSourcesPart([realSource])).toEqual({
+    expect(buildAflatSourcesPart({ sources: [realSource] })).toEqual({
       type: ContentTypes.SOURCES,
       sources: [realSource],
     });
   });
 
+  it('carries the act grouping onto the part when the orchestrator sent one', () => {
+    expect(
+      buildAflatSourcesPart({ sources: [measuredSource], sources_by_act: [measuredAct] }),
+    ).toEqual({
+      type: ContentTypes.SOURCES,
+      sources: [measuredSource],
+      sources_by_act: [measuredAct],
+    });
+  });
+
+  it('leaves sources_by_act off the part when there is no grouping', () => {
+    expect(buildAflatSourcesPart({ sources: [realSource], sources_by_act: [] })).not.toHaveProperty(
+      'sources_by_act',
+    );
+  });
+
   it('builds nothing for an empty list', () => {
-    expect(buildAflatSourcesPart([])).toBeNull();
+    expect(buildAflatSourcesPart({ sources: [] })).toBeNull();
   });
 });
 

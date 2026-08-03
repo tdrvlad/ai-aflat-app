@@ -566,32 +566,89 @@ export type SummaryContentPart = {
 };
 
 /**
- * ai-aflat: one legislative source the retrieval step actually returned, carried
- * verbatim from the search engine's Entity result (see
- * `docs/superpowers/specs/2026-07-27-search-api-contract.md`). `url` is the only
- * link the UI may ever show for this source — it is never constructed, completed
- * or repaired client-side; absent means no link.
+ * ai-aflat: one legislative *provision* the retrieval step actually returned,
+ * carried verbatim from the orchestrator's LegDB adapter. `url` and `viewer_url`
+ * are the only links the UI may ever show for this source — neither is ever
+ * constructed, completed or repaired client-side; absent means no link.
+ *
+ * Several provisions of one act is the normal case, so the renderer groups these
+ * by act (see `TAflatSourceAct`) rather than listing them flat.
  */
 export type TAflatSource = {
+  /** The orchestrator's own label for this source, e.g. "S1" */
+  ref?: string;
   entity_id?: string;
-  entity_type?: 'article' | 'chapter' | 'act';
-  /** Entity label, e.g. "Art. 26" */
-  title?: string;
-  /** Parent act title, e.g. "Legea nr. 50/1991 privind autorizarea…" */
+  /**
+   * The engine's opaque entity label — "provision" today, previously "article".
+   * Carried as a plain string on purpose: nothing branches on it, and the closed
+   * union this used to be silently dropped the real value for a whole round.
+   */
+  entity_type?: string;
+  /** Numeric id of the parent act on legislatie.just.ro */
+  act_id?: number;
+  /** Parent act title, e.g. "CODUL MUNCII din 24 ianuarie 2003 ( Legea nr. 53/2003 )" */
   act_title?: string;
+  /** The PROVISION label, not the act, e.g. "art. 78–81" */
+  title?: string;
+  article_first?: string;
+  article_last?: string;
+  /** Structural breadcrumb inside the act, e.g. "Titlul II › Capitolul V" */
+  path?: string;
+  /** The in-document anchor retrieval returned, e.g. "id_artA620" — never built here */
+  anchor?: string;
   /** Relevant excerpt, plain text */
   snippet?: string;
-  /** Article-level legislatie.just.ro URL exactly as retrieval returned it */
+  /** Provenance line: why retrieval surfaced this, e.g. "… — matched: concedier, preaviz" */
+  why?: string;
+  /** Act-level legislatie.just.ro URL exactly as retrieval returned it */
   url?: string;
+  /** Article-level URL into our own reader, exactly as retrieval returned it */
+  viewer_url?: string;
   /** False = repealed; the UI must say so */
   in_force?: boolean;
+  /** LegDB's own status string, e.g. "ACTIVE" */
+  legdb_status?: string;
+  /** Retrieval confidence band, e.g. "A+" */
+  band?: string;
+  /** Retrieval rank, 1-based */
+  rank?: number;
+  /**
+   * A retrieval step that ran in reduced mode, e.g. "rerank_budget_exhausted".
+   * Informational only — never rendered as an error; the reranker is off by owner
+   * setting, so this is present on essentially every hit.
+   */
+  degraded?: string;
+  /** True = this provision amends another act rather than being that act */
+  likely_amending?: boolean;
   /** True = the answer actually leaned on this source. Absent = treat as cited. */
   cited?: boolean;
+};
+
+/**
+ * ai-aflat: the same provisions the orchestrator returned in `sources`, grouped
+ * one entry per act. This is the shape the citation boxes render from — the flat
+ * list is kept alongside it for anything that needs provision order.
+ */
+export type TAflatSourceAct = {
+  act_id?: number;
+  act_title?: string;
+  /** Act-level legislatie.just.ro URL exactly as retrieval returned it */
+  url?: string;
+  /** Act-level URL into our own reader, exactly as retrieval returned it */
+  viewer_url?: string;
+  in_force?: boolean;
+  legdb_status?: string;
+  band?: string;
+  likely_amending?: boolean;
+  /** True = the answer leaned on at least one provision of this act. */
+  cited?: boolean;
+  provisions: TAflatSource[];
 };
 
 export type SourcesContentPart = {
   type: ContentTypes.SOURCES;
   sources: TAflatSource[];
+  sources_by_act?: TAflatSourceAct[];
 };
 
 export type TMessageContentParts =

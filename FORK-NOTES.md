@@ -1009,3 +1009,106 @@ chunk is written, so the fork's lookup can't race the write — today's `runPipe
 - Not done here: `Sources.tsx`'s visual upgrade (owned separately), and `librechat.yaml`'s still-
   missing `customParams` block for `reasoningKey`/`reasoningFormat` (a separate open item from the
   envelope proposal's Q2, untouched to avoid colliding with whoever picks it up).
+
+### 2026-08-04 — the citation seam widened, and citations rendered act-grouped
+
+The transport landed on 2026-08-03 but the normaliser it fed was written against the 2026-07-29
+fixture shape, so it accepted **8** fields of the **21** the orchestrator actually emits. Everything
+else was dropped silently — including `viewer_url` and `anchor`, which the whole citation design
+depends on, and the `sources_by_act` grouping. Measured against the live orchestrator on `:8085`
+(a real query, `GET /v1/messages/{id}/sources`), not against the brief.
+
+- **`packages/data-provider/src/types/assistants.ts`** — `TAflatSource` widened to all 21 fields
+  (`ref`, `entity_id`, `entity_type`, `act_id`, `act_title`, `title`, `article_first`,
+  `article_last`, `path`, `anchor`, `snippet`, `why`, `url`, `viewer_url`, `in_force`,
+  `legdb_status`, `band`, `rank`, `degraded`, `likely_amending`, `cited`), new `TAflatSourceAct`
+  for the act grouping, and `SourcesContentPart.sources_by_act?`.
+  - **`entity_type` is now a plain `string`, not the `'article' | 'chapter' | 'act'` union.** The
+    live engine emits `"provision"`, which that union silently rejected — the field had been
+    dropped for a whole round without anyone noticing, and nothing in the fork branches on it.
+    A closed union on an opaque engine label buys type safety over a value we never read, at the
+    cost of losing data invisibly. Not a good trade; reverted to an open string.
+  - `title` is the **provision** label (`art. 78–81`), not the act. `act_title` is the act. These
+    were conflated in the earlier fixture shape, which is why the old renderer put `act_title` on
+    top of each box and read as six duplicate boxes for one act.
+- **`packages/api/src/aflat/sources.ts`** — the allowlist is now four typed field tables
+  (`SOURCE_STRING_FIELDS` / `_NUMBER_` / `_BOOLEAN_` / `_URL_`, plus the act-level four), applied by
+  `pickStrings` / `pickNumbers` / `pickBooleans` / `pickUrls`. Unknown keys still never cross, and
+  a key added to the type but not to a table is still dropped — so the tables carry a comment
+  saying so.
+  - **The URL discipline moved up to the seam and got stricter.** `url` and `viewer_url` cross only
+    when already absolute `http(s)`; a relative path, a bare host, `javascript:` and a non-string
+    are **omitted, never repaired**. Previously the seam took any non-empty string and left the
+    check to `Sources.tsx`'s `linkHref()` (which still runs — belt and braces).
+  - `fetchAflatSources` now resolves `{ sources, sources_by_act? }` rather than a bare array, and
+    `buildAflatSourcesPart` takes that payload. An act group whose provisions all fail
+    normalisation is dropped rather than rendering an empty card.
+- **`client/src/components/Chat/Messages/Content/Parts/Sources.tsx` — rebuilt act-grouped.**
+  One card per act, provisions nested. **Several provisions of one act is the normal case**, not a
+  bug: one measured query returned five provisions of the Labour Code across three acts.
+  - Grouping comes from the orchestrator's `sources_by_act` when present; otherwise the flat list
+    is grouped here by `act_id` (falling back to `act_title`). `Part.tsx` passes both through.
+  - **Cited/uncited is decided at the ACT level, and this matters:** in the live payload every
+    *provision* carries `cited: false` while its *act* carries `cited: true`. Splitting on the
+    provision flag — what the old renderer did — would have buried every citation under „Alte surse
+    consultate". There is also a floor: if **no** act is marked cited, all of them render in the
+    main group rather than the whole citation block hiding itself.
+  - **Link split (owner decision, 2026-08-04):** primary per provision → `viewer_url`, our reader,
+    which scrolls to the exact article. The official `legislatie.just.ro` link is quieter and sits
+    **once in the card footer** rather than repeating per provision — deliberate deviation from the
+    brief's "secondary link per provision", because provision-level `url` is act-level in the data
+    (identical for every provision of an act), so per-provision it was six copies of one link. A
+    provision with no `viewer_url` gets its own official link inline, as the brief's fallback
+    requires; a provision with neither, and whose act has neither, renders the „fără link verificat"
+    badge and no anchor at all.
+  - The numeral in the gutter is now the orchestrator's own `ref` (`S1` → `1`), not a positional
+    count, so the number a user sees is the number the engine assigned. Sources arriving without a
+    `ref` fall back to a running count that cannot collide with a real one.
+  - `why` renders as a quiet always-visible provenance line (`… — matched: concedier, preaviz`) —
+    the cheapest trust signal available, and a `<details>` per provision would have been heavier
+    than the thing it hides.
+  - `likely_amending: true` gets a visible „act de modificare" badge plus a one-line note that the
+    act *changes* another act rather than being it. Live and real: the measured query returned
+    OUG 93/2006, an amending ordinance, and the model has already misattributed such text to the
+    Labour Code.
+  - `in_force: false` keeps the „ABROGAT" treatment, now at both act and provision level.
+  - `degraded: "rerank_budget_exhausted"` is carried but **never rendered** — the reranker is off by
+    owner setting and it is present on essentially every hit. Pinned by a test.
+  - **Provisions routinely arrive with no `title` and no `path`.** Every provision of the two
+    non-code acts in the measured query did. The card renders those from the snippet alone; nothing
+    is synthesised to fill the gap. Also pinned by a test.
+  - Style is Pânza semantic tokens only — verified zero hex/rgb/palette classes in the file, and
+    every token used (`--border-medium` included) is defined in both themes. `client/src/style.css`
+    was **not** touched, so the collision sweep was not re-run.
+  - 3 new locale keys in **both** `ro` and `en` (`com_aflat_sources_amending`, `_amending_note`,
+    `_open_article`); `com_aflat_sources_open` — previously dead — is now the act footer link.
+    RO 1839 → 1842, EN 1976 → 1979, both still sorted, RO still zero cedilla.
+- **`librechat.yaml`** — two changes.
+  - `customParams: { reasoningKey: reasoning_content, reasoningFormat: disabled }` on the `ai-aflat`
+    endpoint. `reasoningKey` is what makes the orchestrator's stage narration render as reasoning;
+    `reasoningFormat: disabled` stops the fork sending a reasoning parameter of its own, because the
+    engine takes its effort from the model id.
+  - **Three model specs, not two.** The engine takes `low | medium | high`; two exposed ids left
+    `medium` — the intended default and the middle rung of the price ladder — unreachable.
+    `simple-search` „Rapid" (low), `standard-search` „Normal" (medium, **default**), `deep-search`
+    „Aprofundat" (high). Both pre-existing ids keep working; the ids are the contract with the
+    orchestrator and must not be renamed. **The Romanian labels are provisional and have not had a
+    `language-checker` register pass.**
+  - Validated against `configSchema.strict()` from the built data-provider, not by eye.
+- Tests: `packages/api/src/aflat/sources.spec.ts` 28/28 (7 new: the full 21-field live fixture and
+  a key-set equality guard, the act grouping, an empty act group, `viewer_url`/`url` rejection for
+  relative + `javascript:` + bare-host, non-string `anchor`/`act_id`);
+  `client/.../__tests__/Sources.test.tsx` 18/18 (rewritten against act-grouped fixtures taken from
+  the live payload); `packages/data-schemas/src/methods/message.aflat.spec.ts` 4/4 (+1: the act
+  grouping round-trips through Mongo, since a reload that flattens the grouping is a regression the
+  old case could not see). Regression: `api` `server/controllers/agents` 309/309, `client`
+  `Messages/Content` + `Aflat` + `routes` + `UnifiedSidebar` 601/601. `tsc --noEmit` clean in
+  `client`, `packages/api`, `packages/data-provider`, `packages/data-schemas`; `eslint` clean on
+  every touched file.
+- **Known cosmetic defect, orchestrator-side (not fixed here):** `act_title` arrives with literal
+  markdown emphasis in it — `CODUL MUNCII din 24 ianuarie 2003 (**republicat**) ( Legea nr. 53/2003 )`
+  — and the card renders it verbatim, asterisks and all. Deliberately not stripped in the renderer:
+  `act_title` is part of how a citation is identified, and quietly rewriting it in one place and not
+  another is how citations drift. Belongs on the emitting side.
+- **Also observed:** act titles run to ~300 characters (the engine truncates there). The card
+  clamps to three lines with the full title on `title=`; nothing is cut from the data.
