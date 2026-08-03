@@ -34,3 +34,7 @@ export { default as configSchema } from './config';
 export { default as anonQuestionSchema } from './anonQuestion';
 export { default as consentLogSchema } from './consentLog';
 export { default as productEventSchema } from './productEvent';
+export { default as creditBalanceSchema } from './creditBalance';
+export { default as creditLedgerSchema } from './creditLedger';
+export { default as creditLotSchema } from './creditLot';
+export { default as costLogSchema } from './costLog';

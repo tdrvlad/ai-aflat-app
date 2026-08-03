@@ -29,6 +29,28 @@ import {
   type AuditLogMethods,
 } from './auditLog';
 import { createShareMethods, type ShareMethods } from './share';
+/* ai-aflat — credits */
+import {
+  createCreditMethods,
+  InsufficientCreditsError,
+  type CreditMethods,
+} from './credits';
+export { InsufficientCreditsError };
+export type {
+  CreditBalanceView,
+  CreditLedgerType,
+  CreditLotSource,
+  CreditMethods,
+  GrantCreditsParams,
+  HoldCreditsParams,
+  ICostLog,
+  ICreditAllocation,
+  ICreditBalance,
+  ICreditLedger,
+  ICreditLot,
+  LedgerPage,
+  RecordJobCostParams,
+} from './credits';
 /* Tier 1 — Simple CRUD */
 import { createActionMethods, type ActionMethods } from './action';
 import { createAssistantMethods, type AssistantMethods } from './assistant';
@@ -145,7 +167,9 @@ export type AllMethods = UserMethods &
   SkillMethods &
   SkillSyncMethods &
   AgentMethods &
-  ConfigMethods;
+  ConfigMethods &
+  /* ai-aflat */
+  CreditMethods;
 
 /** Dependencies injected from the api layer into createMethods */
 export interface CreateMethodsDeps {
@@ -278,6 +302,8 @@ export function createMethods(
     ...agentMethods,
     /* Config */
     ...createConfigMethods(mongoose),
+    /* ai-aflat */
+    ...createCreditMethods(mongoose),
   };
 }
 

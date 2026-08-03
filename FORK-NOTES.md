@@ -891,3 +891,47 @@ the real component tree, not just unit assertions.
 - Verified: full client suite `239/239 suites, 2898/2898 tests` green (no regressions from the
   locale JSON edits or the two touched render paths), `npx tsc --noEmit` clean, `npm run build`
   clean, `eslint` clean on every touched file.
+
+### 2026-08-03 — credits metering (phase 1: ledger, lots, grants, cost log)
+
+Design: `../docs/superpowers/specs/2026-08-03-credits-monetization-design.md`.
+Commercial layer: `../documentation/business/business-model.md`.
+
+- **New collections, upstream's billing left alone.** `credit_lots`, `credit_ledger`,
+  `credit_balances`, `cost_logs` (schemas + model factories in `packages/data-schemas`,
+  wired into `schema/index.ts`, `models/index.ts` and the `AllMethods` type).
+  We deliberately do **not** reuse `Balance.tokenCredits` / `Transaction`: those are
+  denominated in dollar-mills and auto-debited by upstream's token-spend machinery,
+  and two units behind one mutable scalar is how billing bugs are born. It also keeps
+  our delta from entangling with upstream on rebase.
+- **`packages/data-schemas/src/methods/credits.ts`** — ledger primitives
+  (`grantCredits`, `holdCredits`, `settleHold`, `releaseHold`, `releaseStaleHolds`,
+  `reverseGrant`, `expireCredits`, `rebuildBalance`, `recordJobCost`), composed into
+  `createMethods` and therefore reachable from `~/models` in `/api`.
+  Money is integer **micro-lei**; there are no floats and no Decimal128 anywhere.
+- **No multi-document transactions.** Production runs a standalone `mongod`, so
+  correctness rests on per-lot guarded atomic updates (`creditsRemaining: {$gte: n}`)
+  plus a write order in which any crash leaves credits *reserved*, never double-spent.
+  `rebuildBalance` repairs a drifted snapshot from the ledger.
+- **`packages/api/src/credits/`** — `pricing.ts` (versioned price list; note the
+  `isolatedDeclarations` build requires explicit type annotations on every exported
+  const, including computed ones) and `service.ts` (price resolution + grant policy).
+- **`api/server/routes/credits.js`** — thin wrapper, mounted at
+  `/api/aflat/credits`. `GET /pricing`, `GET /balance`, `GET /ledger`,
+  admin `POST /grant`, admin `POST /reconcile`.
+- **Automatic grants are lazy, not scheduled.** The signup bonus and the monthly
+  refill are both applied on demand in `ensureAutomaticGrants`, rather than via a
+  hook in `AuthService` plus a cron. This covers OAuth signups (which never pass
+  through `registerUser`), needs no scheduler on a VPS that has none, and grants
+  nothing to dormant accounts — ~15k inactive v1 users cost nothing instead of
+  accruing credits nobody asked for. Both grants are idempotency-keyed, so calling
+  it on every request is safe. **This deviates from the spec's §6.2 wording**, which
+  described a signup hook and a scheduled job; the spec has been corrected.
+- **Not wired to chat yet.** No hold is taken on a real message: that needs the
+  `effort` and `outcome` fields on the orchestrator seam, which are phase 2 and must
+  be agreed with the search-engine session first.
+- **Relevant for phase 2:** the effort selector already has a home. `librechat.yaml`
+  `modelSpecs` currently lists two modes (`simple-search` / `deep-search`); the three
+  effort levels replace that list rather than needing a new UI component.
+- Verified: `credits.spec.ts` 22/22, `credits/service.spec.ts` 18/18,
+  `credits.test.js` 15/15; `tsc --noEmit` clean in both packages; both builds clean.

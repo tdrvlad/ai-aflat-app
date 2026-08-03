@@ -40,6 +40,7 @@ const rum = require('./rum');
 const anonQuestions = require('./anonQuestions');
 const aflatEvents = require('./aflatEvents');
 const consents = require('./consents');
+const credits = require('./credits');
 
 module.exports = {
   rum,
@@ -84,4 +85,5 @@ module.exports = {
   anonQuestions,
   aflatEvents,
   consents,
+  credits,
 };

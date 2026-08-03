@@ -51,6 +51,8 @@ export * from './prompts';
 export * from './projects';
 /* Skills */
 export * from './skills';
+/* ai-aflat — credits */
+export * from './credits';
 /* Endpoints */
 export * from './endpoints';
 /* Files */

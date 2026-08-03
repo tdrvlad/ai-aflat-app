@@ -38,6 +38,10 @@ import { createKeyModel } from './key';
 import { createAnonQuestionModel } from './anonQuestion';
 import { createConsentLogModel } from './consentLog';
 import { createProductEventModel } from './productEvent';
+import { createCreditBalanceModel } from './creditBalance';
+import { createCreditLedgerModel } from './creditLedger';
+import { createCreditLotModel } from './creditLot';
+import { createCostLogModel } from './costLog';
 
 /**
  * Creates all database models for all collections
@@ -83,6 +87,10 @@ export function createModels(mongoose: typeof import('mongoose')): {
   AnonQuestion: ReturnType<typeof createAnonQuestionModel>;
   ConsentLog: ReturnType<typeof createConsentLogModel>;
   ProductEvent: ReturnType<typeof createProductEventModel>;
+  CreditBalance: ReturnType<typeof createCreditBalanceModel>;
+  CreditLedger: ReturnType<typeof createCreditLedgerModel>;
+  CreditLot: ReturnType<typeof createCreditLotModel>;
+  CostLog: ReturnType<typeof createCostLogModel>;
 } {
   return {
     User: createUserModel(mongoose),
@@ -125,5 +133,9 @@ export function createModels(mongoose: typeof import('mongoose')): {
     AnonQuestion: createAnonQuestionModel(mongoose),
     ConsentLog: createConsentLogModel(mongoose),
     ProductEvent: createProductEventModel(mongoose),
+    CreditBalance: createCreditBalanceModel(mongoose),
+    CreditLedger: createCreditLedgerModel(mongoose),
+    CreditLot: createCreditLotModel(mongoose),
+    CostLog: createCostLogModel(mongoose),
   };
 }
