@@ -935,3 +935,77 @@ Commercial layer: `../documentation/business/business-model.md`.
   effort levels replace that list rather than needing a new UI component.
 - Verified: `credits.spec.ts` 22/22, `credits/service.spec.ts` 18/18,
   `credits.test.js` 15/15; `tsc --noEmit` clean in both packages; both builds clean.
+
+### 2026-08-03 — legislative citations: the `SOURCES` side-channel transport
+
+`Sources.tsx` and `ContentTypes.SOURCES` shipped on 2026-07-29 but had never rendered a real
+citation, and could not: the orchestrator emits them out of band as `x_aflat.sources` on the
+terminal SSE chunk, and `@langchain/openai`'s `convertCompletionsDeltaToBaseMessageChunk`
+(`node_modules/@langchain/openai/dist/converters/completions.js`) rebuilds every chunk from a fixed
+allowlist — `delta.content`/`role`/`tool_calls`/`function_call`/`reasoning_content`/`audio` plus
+`rawResponse.usage`. A top-level sibling of `choices` is dropped there, before `@librechat/agents`,
+before `run.ts`, before anything fork-owned. Re-verified in the tree today; the investigation is
+written up in `../docs/integration/2026-07-29-answer-event-envelope-PROPOSAL.md` §"Answers", Q1.
+
+**Chosen fix: don't parse it out of the stream at all — ask for it afterwards.** The fork tells the
+orchestrator which assistant message a completion will become, and once the stream has finished it
+fetches that message's citations from the orchestrator's own job record.
+
+- **`librechat.yaml`** — one new header on the `ai-aflat` custom endpoint:
+  `x-aflat-response-message-id: '{{LIBRECHAT_BODY_MESSAGEID}}'`. That placeholder resolves against
+  `config.configurable.requestBody`, which `AgentClient.chatCompletion` populates with
+  `messageId: this.responseMessageId` (`api/server/controllers/agents/client.js`) — i.e. the
+  server-minted id of the assistant message being generated, unique per turn and known to the fork
+  both before and after the run. `messageId` is one of only three fields
+  `ALLOWED_BODY_FIELDS` (`packages/api/src/utils/env.ts`) permits in a header placeholder.
+- **`packages/api/src/aflat/sources.ts`** (new, plus `aflat/index.ts` and an export from
+  `packages/api/src/index.ts`) — `getAflatSourcesPart()` resolves the `ai-aflat` endpoint's own
+  `baseURL`/`apiKey` out of the app config, `GET`s `{baseURL}/messages/{responseMessageId}/sources`
+  with `Authorization: Bearer <ORCHESTRATOR_API_KEY>`, and returns a `SOURCES` content part.
+  It never throws: an unreachable orchestrator, a 404, a malformed payload and `sources: []` all
+  mean "no part", because empty retrieval is a normal answer, not an error.
+  Each source crosses the boundary field by field — unknown keys are dropped, and a `url` that
+  isn't a string is **omitted rather than repaired**. Nothing here ever constructs, completes or
+  repairs a citation URL.
+- **`api/server/controllers/agents/client.js`** — six lines at the end of `chatCompletion`'s try
+  block: await `getAflatSourcesPart(...)` and push the part onto `this.contentParts`. Pushed last,
+  so the boxes sit under the answer; pushed onto `contentParts` rather than emitted as its own SSE
+  event, so it rides the existing persistence path (`sendCompletion` → `filterMalformedContentParts`
+  → `responseMessage.content` → `saveMessage`) and is there on reload. Same shape of post-run
+  content-part append as the skill-prime cards immediately above it.
+
+**Why not the two alternatives.** (a) `__includeRawResponse` + a `customHandlers` callback: the raw
+chunk would land on `additional_kwargs.__raw_response` on *every* delta, and LangChain's
+`AIMessageChunk` concat merges `additional_kwargs` across chunks — merging N raw responses whose
+`created`/`id` differ is at best garbage and at worst throws, and `@librechat/agents` has no concept
+of the field either (`grep` over its `src/` finds nothing). It also leaves us hostage to the same
+allowlist discipline on every `@langchain/openai` bump. (b) Smuggling `x_aflat` inside
+`rawResponse.usage`, which *is* on the allowlist and is spread into `response_metadata`: it works
+today, but it puts legal citations inside a token-accounting field that billing code reads, for no
+gain over an explicit fetch.
+
+**What the orchestrator must provide** (built on its side, `orchestrator/` in the parent repo):
+store the `x-aflat-response-message-id` request header on the job, and serve
+`GET /v1/messages/{responseMessageId}/sources` → `200 {"job_id", "query_id", "sources": [...]}`
+(same `sources[]` `buildFinalSources` already produces), `404` when unknown, behind the existing
+`/v1/*` bearer-key middleware. Sources must be committed to the job store *before* the terminal SSE
+chunk is written, so the fork's lookup can't race the write — today's `runPipeline` already does
+`store.complete()` before the stream's finish chunk, so this holds.
+
+- Tests: `packages/api/src/aflat/sources.spec.ts` (21 cases — a real `node:http` stub orchestrator,
+  not a mocked `fetch`: payload passthrough, auth header, empty/404/500/unreachable, unknown-field
+  and non-string-url rejection, `${VAR}` resolution, endpoint gating, and a guard that
+  `{{LIBRECHAT_BODY_MESSAGEID}}` still resolves — if upstream ever drops `messageId` from
+  `ALLOWED_BODY_FIELDS`, citations would otherwise go quietly missing);
+  `api/server/controllers/agents/__tests__/aflatSources.spec.js` (4 cases — drives the real
+  `AgentClient.sendCompletion` against the stub orchestrator and asserts the returned completion's
+  content parts); `packages/data-schemas/src/methods/message.aflat.spec.ts` (3 cases — the part
+  round-trips through `saveMessage`/`getMessages` on a real in-memory Mongo, which is the
+  survives-a-reload requirement).
+- Verified: those three suites green, plus `api` `server/controllers/agents` 309/309 and
+  `client` `Sources.test.tsx` 12/12 as regression; `tsc --noEmit` clean in `packages/api` and
+  `packages/data-schemas`; `eslint` clean on every touched file; `librechat.yaml` still validates
+  against `configSchema.strict()`.
+- Not done here: `Sources.tsx`'s visual upgrade (owned separately), and `librechat.yaml`'s still-
+  missing `customParams` block for `reasoningKey`/`reasoningFormat` (a separate open item from the
+  envelope proposal's Q2, untouched to avoid colliding with whoever picks it up).

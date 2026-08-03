@@ -19,6 +19,7 @@ const {
   memoryInstructions,
   createTokenCounter,
   applyContextToAgent,
+  getAflatSourcesPart,
   isMemoryAgentEnabled,
   recordCollectedUsage,
   sendEvent,
@@ -1487,6 +1488,24 @@ class AgentClient extends BaseClient {
             part.tool_call_ids
           );
         });
+      }
+
+      /**
+       * ai-aflat: append the legislative citations for this response as a
+       * `SOURCES` content part. Fetched from the orchestrator's own job record
+       * rather than read off the SSE stream — `@langchain/openai` rebuilds every
+       * chunk from a fixed allowlist and drops out-of-band fields before any
+       * fork-owned code runs. Pushed last so the citation boxes sit under the
+       * answer, and pushed onto `contentParts` (not emitted as a separate SSE
+       * event) so it persists with the message like every other content part.
+       */
+      const aflatSourcesPart = await getAflatSourcesPart({
+        appConfig,
+        endpoint: this.options.agent?.endpoint,
+        responseMessageId: this.responseMessageId,
+      });
+      if (aflatSourcesPart) {
+        this.contentParts.push(aflatSourcesPart);
       }
     } catch (err) {
       if (abortController.signal.aborted) {

@@ -65,6 +65,11 @@ endpoints:
       headers:
         x-aflat-user-id: '{{LIBRECHAT_USER_ID}}'
         x-aflat-conversation-id: '{{LIBRECHAT_BODY_CONVERSATIONID}}'
+        # The assistant message this completion will become. The orchestrator stores
+        # it on the job so the fork can fetch that job's citations back out of band
+        # once the stream ends (GET /v1/messages/{id}/sources). `LIBRECHAT_BODY_MESSAGEID`
+        # resolves to `AgentClient.responseMessageId` — see packages/api/src/aflat/sources.ts.
+        x-aflat-response-message-id: '{{LIBRECHAT_BODY_MESSAGEID}}'
       models:
         default: ['simple-search', 'deep-search']
         fetch: false
