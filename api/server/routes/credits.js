@@ -6,6 +6,7 @@ const {
   grantSignupBonus,
   runMonthlyRefill,
   createCheckoutSession,
+  reconcileCostBases,
   isPaymentsConfigured,
   CheckoutError,
   PRICE_LIST_VERSION,
@@ -190,6 +191,37 @@ router.post('/reconcile', checkAdmin, async (req, res) => {
   } catch (error) {
     logger.error('[credits] Error reconciling balance', error);
     return res.status(500).json({ error: 'could not reconcile balance' });
+  }
+});
+
+/**
+ * Replace estimated purchase cost bases with the real Stripe fees.
+ *
+ * Credits are granted the instant a payment completes, on an estimated fee,
+ * because Stripe's balance transaction is frequently not ready yet and no buyer
+ * should wait on our bookkeeping. This closes that gap afterwards.
+ *
+ * Safe to run repeatedly and safe to never run — an unreconciled purchase carries
+ * a slightly wrong cost basis, which distorts margin reporting and nothing else.
+ * No user-visible balance depends on it.
+ *
+ * Deliberately a manual/cron trigger rather than a schedule, matching
+ * `expireCredits` and `releaseStaleHolds`: this deployment has no scheduler.
+ */
+router.post('/reconcile-costs', checkAdmin, async (req, res) => {
+  if (!isPaymentsConfigured()) {
+    return res.status(503).json({ error: 'payments_unavailable' });
+  }
+
+  const limit = Math.min(Number(req.body?.limit) || 100, 500);
+
+  try {
+    const report = await reconcileCostBases(methods, limit);
+    logger.info(`[credits] admin ${req.user.id} reconciled cost bases: ${JSON.stringify(report)}`);
+    return res.json(report);
+  } catch (error) {
+    logger.error('[credits] Error reconciling cost bases', error);
+    return res.status(500).json({ error: 'could not reconcile cost bases' });
   }
 });
 

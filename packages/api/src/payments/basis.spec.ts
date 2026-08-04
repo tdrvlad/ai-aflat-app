@@ -93,9 +93,23 @@ describe('payments/basis', () => {
   });
 
   describe('estimateFeeMicroRon', () => {
-    it('is pessimistic — an estimate must not understate the fee', () => {
+    it('includes the fixed component, not just the percentage', () => {
       const gross = 99 * MICRO_RON;
       expect(estimateFeeMicroRon(gross)).toBeGreaterThan(gross * 0.014);
+    });
+
+    /**
+     * The estimate is knowingly approximate — the first real reconciliation found
+     * the true fee ~15% higher than this predicts. It exists only so a buyer never
+     * waits on Stripe's balance transaction; `reconcileCostBases` is what makes the
+     * figure true. This pins that it stays in a sane range rather than that it is
+     * accurate, which it is not claimed to be.
+     */
+    it('stays within a plausible range of the charge', () => {
+      const gross = 29 * MICRO_RON;
+      const fee = estimateFeeMicroRon(gross);
+      expect(fee).toBeGreaterThan(0);
+      expect(fee).toBeLessThan(gross * 0.1);
     });
   });
 });

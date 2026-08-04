@@ -1162,5 +1162,21 @@ depends on, and the `sources_by_act` grouping. Measured against the live orchest
     - `request.post` is untyped upstream (unlike `request.get`), hence the single cast in `credits.ts`.
     - Tests: 9 in `client/src/components/Aflat/__tests__/Wallet.spec.tsx`. Aflat suite 67/67, routes
       22/22, `tsc --noEmit` clean, `npm run frontend` builds.
-  - **Romanian copy is provisional** — the wallet strings and „Rapid" / „Normal" / „Aprofundat" still
-    need a `language-checker` register pass before shipping, as the business doc requires.
+  - **Romanian register pass done.** Wallet copy moved off accounting register („mișcare de credite",
+    „în lucru") onto plain spoken Romanian, and „Cum se consumă" became „Cât costă o întrebare".
+    **Romanian pluralisation was simply wrong** and is now correct: three forms, with the 20+ form
+    taking „de" („o întrebare" / „5 întrebări" / „20 de întrebări"). A single `{{count}} întrebări`
+    string rendered „1 întrebări" on the balance chip for any user with fewer than 20 credits' worth.
+    Base keys are retained beside the `_one`/`_few`/`_other` variants only because the generated
+    `TranslationKeys` union is derived from the catalog; i18next still resolves the suffixed form.
+    Pinned by `client/src/components/Aflat/__tests__/WalletCopy.spec.ts`, which also asserts
+    comma-below diacritics (ș/ț, never ş/ţ).
+  - **`POST /api/aflat/credits/reconcile-costs` (admin)** runs `reconcileCostBases`. Deliberately a
+    manual/cron trigger rather than a schedule, matching `expireCredits` and `releaseStaleHolds` —
+    this deployment has no scheduler.
+    - **Run against the first real purchase, it corrected the basis from 0.11155 to 0.11028
+      lei/credit.** Backing the fee out: Stripe actually charged **1.91 lei** on a 29 lei payment,
+      against the **1.656 lei** the business model assumes (1.4% + 1.25). The documented fee
+      assumption — and therefore the margin table resting on it — is optimistic. The estimate
+      constants are left unchanged for now (one observation is not a fee schedule) but the
+      misleading "deliberately pessimistic" comment on them was removed, because it was false.

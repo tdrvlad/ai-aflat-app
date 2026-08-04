@@ -88,8 +88,15 @@ export function costBasisPerCredit({
  * basis that is briefly approximate is recoverable in a way that a customer who
  * paid and received nothing is not.
  *
- * Stripe's Romanian card pricing at the time of writing. Deliberately pessimistic:
- * an estimate that understates the fee overstates the margin.
+ * These were taken from the business model's assumption of 1.4% + 1.25 lei.
+ *
+ * **The first real reconciliation showed that assumption is optimistic**: a 29 lei
+ * charge cost 1.91 lei in fees, not the 1.656 lei predicted. The figures are left
+ * as-is deliberately — one observation is not a fee schedule, and the estimate is
+ * short-lived by construction, since `reconcileCostBases` replaces it with the
+ * real balance-transaction fee. Revisit them (and the business model's margin
+ * table, which rests on the same assumption) once enough purchases have settled to
+ * see the actual rate.
  */
 export const ESTIMATED_FEE_PERCENT: number = 0.014;
 export const ESTIMATED_FEE_FIXED_MICRO_RON: number = 1.25 * MICRO_RON;
