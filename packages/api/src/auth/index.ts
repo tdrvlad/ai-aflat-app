@@ -8,3 +8,5 @@ export * from './password';
 export * from './invite';
 export * from './codeapi';
 export * from './openidRoleSync';
+/* ai-aflat — embedded Clerk sign-in */
+export * from './clerk';

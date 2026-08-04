@@ -1386,6 +1386,8 @@ export type TStartupConfig = {
   };
   serverDomain: string;
   emailLoginEnabled: boolean;
+  /** ai-aflat: null when embedded Clerk sign-in is not configured. */
+  clerkPublishableKey?: string | null;
   registrationEnabled: boolean;
   socialLoginEnabled: boolean;
   passwordResetEnabled: boolean;

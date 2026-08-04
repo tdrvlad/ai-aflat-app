@@ -1180,3 +1180,35 @@ depends on, and the `sources_by_act` grouping. Measured against the live orchest
       assumption — and therefore the margin table resting on it — is optimistic. The estimate
       constants are left unchanged for now (one observation is not a fee schedule) but the
       misleading "deliberately pessimistic" comment on them was removed, because it was false.
+
+- **Embedded Clerk sign-in (committed):** Clerk's `<SignIn/>` rendered inside our own login page
+  instead of redirecting to Clerk's hosted page. New `packages/api/src/auth/clerk.ts` (JWKS token
+  verification), `api/server/routes/clerkAuth.js` mounted at `/api/aflat/auth`, and
+  `client/src/components/Aflat/Auth/ClerkSignIn.tsx`. Dependency `@clerk/clerk-react@^5.61.3` in
+  `client`. Design: `docs/superpowers/specs/2026-08-04-clerk-embedded-auth-design.md`.
+  - **The exchange is the only new security surface.** Embedding leaves the browser holding a
+    *Clerk* token while the app needs a *LibreChat* one. `POST /api/aflat/auth/clerk` verifies the
+    Clerk token against the instance JWKS and then hands off to **`setAuthTokens`** — the same
+    primitive the OAuth callback already uses — so the existing refresh flow establishes the
+    session. Deliberately minimal: the less bespoke session code on the login path, the fewer ways
+    it fails. User creation reuses `createUser` with the exact shape `openidStrategy` writes, and
+    lookup reuses `findOpenIDUser`; no parallel notion of a user is introduced.
+  - **Issuer pinning is not optional.** A signature check alone proves only "some Clerk signed
+    this" — anyone could sign up on their own Clerk instance and walk in. `clerk.spec.ts` pins all
+    eight ways in: wrong key, wrong issuer, expired, no `sub`, `alg: none`, garbage, and that a
+    missing `email_verified` reads as **false** (otherwise the signup bonus reaches unverified
+    addresses, which is exactly what its gate exists to prevent).
+  - `isEmailDomainAllowed` runs on this path too — a second front door that ignored the collection
+    gate would silently defeat a deliberate product decision.
+  - **An existing non-`openid` account with the same email is refused (409), never linked.**
+    Linking would let anyone able to create a Clerk account with a known email take over the
+    matching local account. This is why the ~15k v1 users need their own migration decision.
+  - `CLERK_PUBLISHABLE_KEY` is served through `/api/config` rather than baked in as a `VITE_`
+    variable, so one bundle serves dev and production instances. Publishable keys are public by
+    construction (they encode the instance domain).
+  - **Rollback is a config change:** unset `CLERK_PUBLISHABLE_KEY` and login falls back to the OIDC
+    redirect, which this work leaves untouched. `?redirect=false` forces the fallback per-request.
+  - **LibreChat's local auth is NOT yet deleted** — only bypassed, and already disabled by
+    `ALLOW_EMAIL_LOGIN=false`. Removing the password/registration/reset/2FA machinery is the
+    remaining half of the decision and is deliberately a separate change, so the embedded path can
+    be proven in the browser before the fallback is destroyed.

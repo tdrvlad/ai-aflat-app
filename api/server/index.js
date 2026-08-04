@@ -254,6 +254,8 @@ const startServer = async () => {
   /* Every credits route authenticates inside the router; a balance has no meaning
    * without a subject. */
   app.use('/api/aflat/credits', routes.credits);
+  /* ai-aflat — exchanges a verified Clerk session for a LibreChat one. */
+  app.use('/api/aflat/auth', routes.clerkAuth);
   /* API Endpoints */
   app.use('/api/auth', preAuthTenantMiddleware, routes.auth);
   app.use('/api/admin', routes.adminAuth);

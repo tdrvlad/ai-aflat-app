@@ -79,6 +79,12 @@ function buildPreLoginPayload() {
     openidLabel: process.env.OPENID_BUTTON_LABEL || 'Continue with OpenID',
     openidImageUrl: process.env.OPENID_IMAGE_URL,
     openidAutoRedirect: isEnabled(process.env.OPENID_AUTO_REDIRECT),
+    /**
+     * ai-aflat: served rather than baked in at build time as a `VITE_` variable,
+     * so one bundle can serve the dev and production Clerk instances. Publishable
+     * keys are public by construction — this is not a secret leak.
+     */
+    clerkPublishableKey: process.env.CLERK_PUBLISHABLE_KEY || null,
     samlLoginEnabled: !isOpenIdEnabled && isSamlEnabled,
     samlLabel: process.env.SAML_BUTTON_LABEL,
     samlImageUrl: process.env.SAML_IMAGE_URL,

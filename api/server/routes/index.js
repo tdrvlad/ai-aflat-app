@@ -42,6 +42,7 @@ const aflatEvents = require('./aflatEvents');
 const consents = require('./consents');
 const credits = require('./credits');
 const webhooks = require('./webhooks');
+const clerkAuth = require('./clerkAuth');
 
 module.exports = {
   rum,
@@ -88,4 +89,5 @@ module.exports = {
   consents,
   credits,
   webhooks,
+  clerkAuth,
 };

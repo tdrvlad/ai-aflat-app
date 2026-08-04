@@ -8,6 +8,7 @@ import { ErrorMessage } from '~/components/Auth/ErrorMessage';
 import SocialButton from '~/components/Auth/SocialButton';
 import { useAuthContext } from '~/hooks/AuthContext';
 import { useLocalize } from '~/hooks';
+import ClerkSignIn from '~/components/Aflat/Auth/ClerkSignIn';
 import LoginForm from './LoginForm';
 
 interface LoginLocationState {
@@ -58,7 +59,19 @@ function Login() {
     }
   }, [disableAutoRedirect, searchParams, setSearchParams]);
 
+  /**
+   * ai-aflat: embedded Clerk is the front door when it is configured.
+   *
+   * It deliberately suppresses the auto-redirect — rendering Clerk inline *and*
+   * bouncing to its hosted page would race, and the user would see the widget
+   * flash before being thrown out of it. `?redirect=false` still forces the
+   * fallback, which is the escape hatch if the exchange ever misbehaves.
+   */
+  const clerkPublishableKey = startupConfig?.clerkPublishableKey ?? null;
+  const useEmbeddedClerk = Boolean(clerkPublishableKey) && !isAutoRedirectDisabled;
+
   const shouldAutoRedirect =
+    !useEmbeddedClerk &&
     startupConfig?.openidLoginEnabled &&
     startupConfig?.openidAutoRedirect &&
     startupConfig?.serverDomain &&
@@ -95,6 +108,15 @@ function Login() {
           />
         </div>
       </div>
+    );
+  }
+
+  if (useEmbeddedClerk && clerkPublishableKey) {
+    return (
+      <>
+        {error != null && <ErrorMessage>{localize(getLoginError(error))}</ErrorMessage>}
+        <ClerkSignIn publishableKey={clerkPublishableKey} />
+      </>
     );
   }
 
