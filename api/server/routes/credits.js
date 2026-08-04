@@ -5,6 +5,9 @@ const {
   currentRefillPeriod,
   grantSignupBonus,
   runMonthlyRefill,
+  createCheckoutSession,
+  isPaymentsConfigured,
+  CheckoutError,
   PRICE_LIST_VERSION,
 } = require('@librechat/api');
 const requireJwtAuth = require('~/server/middleware/requireJwtAuth');
@@ -87,6 +90,45 @@ router.get('/ledger', async (req, res) => {
   } catch (error) {
     logger.error('[credits] Error reading ledger', error);
     return res.status(500).json({ error: 'could not read ledger' });
+  }
+});
+
+/**
+ * Opens a Stripe Checkout session for one bundle.
+ *
+ * Two things this route refuses, both of which are the point of it existing:
+ * a purchase without explicit consent to immediate performance (the buyer would
+ * otherwise keep a 14-day withdrawal right over credits they can spend instantly),
+ * and any amount supplied by the client — the bundle id is a lookup key against the
+ * server's own price list and nothing more.
+ */
+router.post('/checkout', async (req, res) => {
+  if (!isPaymentsConfigured()) {
+    return res.status(503).json({ error: 'payments_unavailable' });
+  }
+
+  const { bundleId, consentImmediatePerformance } = req.body ?? {};
+
+  if (typeof bundleId !== 'string' || !bundleId.trim()) {
+    return res.status(400).json({ error: 'bundleId is required' });
+  }
+
+  try {
+    const { url, paymentId } = await createCheckoutSession(methods, {
+      userId: req.user.id,
+      bundleId: bundleId.trim(),
+      consentImmediatePerformance: consentImmediatePerformance === true,
+      email: req.user.email ?? null,
+    });
+
+    logger.info(`[credits] checkout ${paymentId} opened for ${req.user.id} (${bundleId})`);
+    return res.status(201).json({ url });
+  } catch (error) {
+    if (error instanceof CheckoutError) {
+      return res.status(400).json({ error: error.code });
+    }
+    logger.error('[credits] Error creating checkout session', error);
+    return res.status(500).json({ error: 'could not start checkout' });
   }
 });
 

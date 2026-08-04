@@ -42,6 +42,8 @@ import { createCreditBalanceModel } from './creditBalance';
 import { createCreditLedgerModel } from './creditLedger';
 import { createCreditLotModel } from './creditLot';
 import { createCostLogModel } from './costLog';
+import { createPaymentModel } from './payment';
+import { createPaymentEventModel } from './paymentEvent';
 
 /**
  * Creates all database models for all collections
@@ -91,6 +93,8 @@ export function createModels(mongoose: typeof import('mongoose')): {
   CreditLedger: ReturnType<typeof createCreditLedgerModel>;
   CreditLot: ReturnType<typeof createCreditLotModel>;
   CostLog: ReturnType<typeof createCostLogModel>;
+  Payment: ReturnType<typeof createPaymentModel>;
+  PaymentEvent: ReturnType<typeof createPaymentEventModel>;
 } {
   return {
     User: createUserModel(mongoose),
@@ -137,5 +141,7 @@ export function createModels(mongoose: typeof import('mongoose')): {
     CreditLedger: createCreditLedgerModel(mongoose),
     CreditLot: createCreditLotModel(mongoose),
     CostLog: createCostLogModel(mongoose),
+    Payment: createPaymentModel(mongoose),
+    PaymentEvent: createPaymentEventModel(mongoose),
   };
 }

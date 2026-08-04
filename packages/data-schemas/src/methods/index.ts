@@ -51,6 +51,16 @@ export type {
   LedgerPage,
   RecordJobCostParams,
 } from './credits';
+/* ai-aflat — payments */
+import { createPaymentMethods, type PaymentMethods } from './payments';
+export type {
+  CreatePaymentParams,
+  IPayment,
+  IPaymentEvent,
+  MarkPaymentPaidParams,
+  PaymentMethods,
+  PaymentStatus,
+} from './payments';
 /* Tier 1 — Simple CRUD */
 import { createActionMethods, type ActionMethods } from './action';
 import { createAssistantMethods, type AssistantMethods } from './assistant';
@@ -169,7 +179,8 @@ export type AllMethods = UserMethods &
   AgentMethods &
   ConfigMethods &
   /* ai-aflat */
-  CreditMethods;
+  CreditMethods &
+  PaymentMethods;
 
 /** Dependencies injected from the api layer into createMethods */
 export interface CreateMethodsDeps {
@@ -304,6 +315,7 @@ export function createMethods(
     ...createConfigMethods(mongoose),
     /* ai-aflat */
     ...createCreditMethods(mongoose),
+    ...createPaymentMethods(mongoose),
   };
 }
 

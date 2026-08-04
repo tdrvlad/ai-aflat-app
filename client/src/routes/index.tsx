@@ -48,6 +48,12 @@ const loadProjectsView = () =>
     Component: m.ProjectsView,
   }));
 
+/** ai-aflat wallet. Lazy: most sessions never open it. */
+const loadWallet = () =>
+  import('~/components/Aflat/Wallet').then((m) => ({
+    Component: m.Wallet,
+  }));
+
 const loadProjectWorkspace = () =>
   import('~/components/Projects').then((m) => ({
     Component: m.ProjectWorkspace,
@@ -155,6 +161,11 @@ export const router = createBrowserRouter(
             {
               path: 'search',
               element: <Search />,
+            },
+            {
+              /* ai-aflat — the wallet. English slug, Romanian labels. */
+              path: 'credits',
+              lazy: loadWallet,
             },
             {
               path: 'prompts',

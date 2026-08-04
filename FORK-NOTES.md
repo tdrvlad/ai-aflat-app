@@ -1112,3 +1112,55 @@ depends on, and the `sources_by_act` grouping. Measured against the live orchest
   another is how citations drift. Belongs on the emitting side.
 - **Also observed:** act titles run to ~300 characters (the engine truncates there). The card
   clamps to three lines with the full title on `title=`; nothing is cut from the data.
+
+- **Stripe purchasing — credits phase 3 (committed):** new TS module `packages/api/src/payments`
+  (`basis` / `checkout` / `client` / `config` / `reconcile` / `webhook`), two new collections
+  (`payments`, `payment_events`) with schemas + models + `methods/payments.ts` in `data-schemas`,
+  `POST /api/aflat/credits/checkout` on the existing credits router, and a **new** unauthenticated
+  raw-body router at `/api/aflat/webhooks/stripe`. Dependency `stripe@^22.4.0` added to `api`
+  (runtime) and `packages/api` (peer + dev), matching how the monorepo declares every other runtime
+  dep. Design: `docs/superpowers/specs/2026-08-04-stripe-payments-design.md`.
+  - **`api/server/index.js` mounts the webhook router BEFORE `express.json()`** — the one change to
+    `api/` that is not a thin wrapper, and it is load-bearing. Stripe signature verification can only
+    run against unparsed bytes, so the router carries its own `express.raw()`. Moving the mount below
+    the JSON parser breaks every webhook with an error that reads like a Stripe misconfiguration.
+    A comment says so at the mount site; `server/routes/webhooks.test.js` mounts it the same way.
+  - **Three deviations from the parent credits spec**, all argued in §3.3 of the payments design:
+    (1) **no `stripePriceId`** — inline `price_data` instead, so `pricing.ts` stays the single source
+    of truth and a reprice is a one-line change rather than a Stripe-dashboard ritual; (2) the cost
+    basis may settle a beat after the grant — credits are granted immediately on an estimated fee
+    flagged `costBasisPending` because Stripe's balance transaction is often not ready at
+    `checkout.session.completed`, and `reconcileCostBases` writes the true figure later; (3) a
+    **`payment_events`** collection, because `grantCredits`'s idempotency key does not cover the
+    events that grant nothing (`payment_intent.payment_failed`, `charge.refunded`).
+  - `payment_method_types` is deliberately **omitted** from the session so the enabled methods come
+    from the Stripe Dashboard — that is what makes turning on **Revolut Pay** a toggle, not a deploy.
+    Unverified: whether Revolut Pay supports RON. If it is EUR-only it simply will not render.
+  - New `credits` primitive `correctLotCostBasis`, which **refuses on a lot already spent against**
+    (guard expressed in the query, not checked first) — correcting a lot after a debit would leave it
+    disagreeing with the ledger allocations that copied the old basis.
+  - VAT is read from `AFLAT_VAT_RATE` (default 0.21) rather than hardcoded: the rate is still an open
+    decision with the accountant, and a wrong one silently corrupts every margin figure.
+  - **Nothing charges without operator setup** — `isPaymentsConfigured()` returns 503 rather than
+    throwing, so the app boots and answers questions fine on a deployment that cannot take payments.
+  - Tests: 27 in `packages/api/src/payments`, 5 checkout-route + 4 webhook-route in `api`. Full
+    sweep green (45 `packages/api`, 22 `data-schemas`, 24 `api` routes); `tsc --noEmit` and
+    `eslint` clean across every touched file.
+  - **Wallet UI at `/credits` (committed):** `client/src/components/Aflat/Wallet/`
+    (`Wallet.tsx`, `Bundles.tsx`, `History.tsx`, `credits.ts`), lazy-routed under `Root` in
+    `client/src/routes/index.tsx`. Data layer calls `/api/aflat/credits` directly via `apiBaseUrl()`
+    rather than through `librechat-data-provider`, matching `consent.ts` and `usePostLoginHandoff.ts`
+    — keeping fork endpoints out of the shared package is what keeps rebases cheap. 45 RO + 45 EN
+    locale keys added (`com_aflat_wallet_*`, `com_aflat_effort_*`).
+    - **Commercial rules pinned by tests**, because they would otherwise soften unnoticed: the effort
+      ladder is quoted in **credits only**, **RON appears on bundles and nowhere else**, and checkout
+      cannot start without an explicit tick waiving the 14-day withdrawal right (never pre-ticked,
+      adjacent to the buy buttons rather than buried in terms).
+    - **The return page grants nothing.** Credits come from the webhook, which can land after the
+      redirect, so `useReturnFromCheckout` polls briefly and says „Creditele apar în câteva secunde"
+      rather than showing a stale balance that reads as "I paid and got nothing".
+    - `request.post` is untyped upstream (unlike `request.get`), hence the single cast in `credits.ts`.
+    - Tests: 9 in `client/src/components/Aflat/__tests__/Wallet.spec.tsx`. Aflat suite 67/67, routes
+      22/22, `tsc --noEmit` clean, `npm run frontend` builds.
+  - **Romanian copy is provisional** — the wallet strings and „Rapid" / „Normal" / „Aprofundat" still
+    need a `language-checker` register pass before shipping, as the business doc requires.

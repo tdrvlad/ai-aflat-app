@@ -38,3 +38,5 @@ export { default as creditBalanceSchema } from './creditBalance';
 export { default as creditLedgerSchema } from './creditLedger';
 export { default as creditLotSchema } from './creditLot';
 export { default as costLogSchema } from './costLog';
+export { default as paymentSchema } from './payment';
+export { default as paymentEventSchema } from './paymentEvent';

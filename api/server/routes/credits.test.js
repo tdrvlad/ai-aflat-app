@@ -212,3 +212,73 @@ describe('POST /reconcile', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('POST /checkout', () => {
+  beforeEach(() => {
+    delete process.env.STRIPE_SECRET_KEY;
+    delete process.env.STRIPE_WEBHOOK_SECRET;
+  });
+
+  it('reports unavailable when Stripe is unconfigured', async () => {
+    mockCurrentUser = verifiedUser();
+    const res = await request(app)
+      .post('/api/aflat/credits/checkout')
+      .send({ bundleId: 'uzual', consentImmediatePerformance: true });
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('payments_unavailable');
+  });
+
+  /**
+   * Credits are spendable the instant they land, so without this consent every
+   * purchase would stay refundable for a fortnight regardless of how many answers
+   * it had already bought. The refusal has to be server-side — a checkbox the
+   * frontend merely renders is not a record of anything.
+   */
+  it('refuses without consent to immediate performance', async () => {
+    process.env.STRIPE_SECRET_KEY = 'sk_test_x';
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_x';
+    mockCurrentUser = verifiedUser();
+
+    const res = await request(app)
+      .post('/api/aflat/credits/checkout')
+      .send({ bundleId: 'uzual', consentImmediatePerformance: false });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('consent_required');
+  });
+
+  it('refuses an unknown bundle', async () => {
+    process.env.STRIPE_SECRET_KEY = 'sk_test_x';
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_x';
+    mockCurrentUser = verifiedUser();
+
+    const res = await request(app)
+      .post('/api/aflat/credits/checkout')
+      .send({ bundleId: 'free-money', consentImmediatePerformance: true });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('unknown_bundle');
+  });
+
+  it('requires a bundleId', async () => {
+    process.env.STRIPE_SECRET_KEY = 'sk_test_x';
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_x';
+    mockCurrentUser = verifiedUser();
+
+    const res = await request(app)
+      .post('/api/aflat/credits/checkout')
+      .send({ consentImmediatePerformance: true });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('refuses an unauthenticated caller', async () => {
+    mockCurrentUser = null;
+    const res = await request(app)
+      .post('/api/aflat/credits/checkout')
+      .send({ bundleId: 'uzual', consentImmediatePerformance: true });
+
+    expect(res.status).toBe(401);
+  });
+});

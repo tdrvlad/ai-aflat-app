@@ -174,6 +174,15 @@ const startServer = async () => {
   /* Middleware */
   app.use(metricsMiddleware);
   app.use(noIndex);
+  /**
+   * ai-aflat — Stripe webhooks mount BEFORE the JSON parser, on purpose.
+   *
+   * Signature verification can only run against the unparsed request body, so this
+   * router applies its own `express.raw`. Moving it below `express.json()` breaks
+   * every webhook with an error that reads like a Stripe misconfiguration.
+   */
+  app.use('/api/aflat/webhooks', routes.webhooks);
+
   app.use(express.json({ limit: '3mb' }));
   app.use(express.urlencoded({ extended: true, limit: '3mb' }));
   app.use(handleJsonParseError);

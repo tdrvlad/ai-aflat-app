@@ -76,6 +76,9 @@ bower_components/
 # refs resolved from the untracked .env). See FORK-NOTES.md.
 librechat.yml
 !librechat.yaml
+# Local-only config override (e.g. lifting the sapio.ro collection gate for dev).
+# Pointed at by CONFIG_PATH in .env; must never ship.
+librechat.local.yaml
 
 # Environment
 .npmrc

@@ -53,6 +53,8 @@ export * from './projects';
 export * from './skills';
 /* ai-aflat — credits */
 export * from './credits';
+/* ai-aflat — payments */
+export * from './payments';
 /* ai-aflat — legislative citation transport */
 export * from './aflat';
 /* Endpoints */

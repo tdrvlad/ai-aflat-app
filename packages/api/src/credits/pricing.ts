@@ -79,6 +79,17 @@ export const BUNDLES: readonly CreditBundle[] = [
   { id: 'extins', credits: 2500, priceRon: 249 },
 ] as const;
 
+/**
+ * The only sanctioned way to turn a client-supplied bundle id into a price.
+ *
+ * Checkout must never take an amount from the request body: a client that can name
+ * its own price can buy 2500 credits for a leu. The id is a lookup key here and
+ * nothing more.
+ */
+export function getBundle(bundleId: string): CreditBundle | null {
+  return BUNDLES.find((bundle) => bundle.id === bundleId) ?? null;
+}
+
 export function isEffort(value: unknown): value is Effort {
   return typeof value === 'string' && (EFFORT_LEVELS as readonly string[]).includes(value);
 }

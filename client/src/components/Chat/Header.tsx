@@ -7,6 +7,7 @@ import { useGetStartupConfig } from '~/data-provider';
 import ExportAndShareMenu from './ExportAndShareMenu';
 import { OpenSidebar, PresetsMenu } from './Menus';
 import BookmarkMenu from './Menus/BookmarkMenu';
+import BalanceChip from '~/components/Aflat/Wallet/BalanceChip';
 import { TemporaryChat } from './TemporaryChat';
 import AddMultiConvo from './AddMultiConvo';
 import { useHasAccess } from '~/hooks';
@@ -59,6 +60,7 @@ function Header() {
               {hasAccessToMultiConvo === true && <AddMultiConvo />}
               {isSmallScreen && (
                 <>
+                  <BalanceChip />
                   <ExportAndShareMenu
                     isSharedButtonEnabled={startupConfig?.sharedLinksEnabled ?? false}
                   />
@@ -71,6 +73,8 @@ function Header() {
 
         {!isSmallScreen && (
           <div className="flex items-center gap-2">
+            {/* ai-aflat: the only persistent cost element in the interface. */}
+            <BalanceChip />
             <ExportAndShareMenu
               isSharedButtonEnabled={startupConfig?.sharedLinksEnabled ?? false}
             />

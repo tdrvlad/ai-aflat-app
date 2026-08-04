@@ -41,6 +41,7 @@ const anonQuestions = require('./anonQuestions');
 const aflatEvents = require('./aflatEvents');
 const consents = require('./consents');
 const credits = require('./credits');
+const webhooks = require('./webhooks');
 
 module.exports = {
   rum,
@@ -86,4 +87,5 @@ module.exports = {
   aflatEvents,
   consents,
   credits,
+  webhooks,
 };

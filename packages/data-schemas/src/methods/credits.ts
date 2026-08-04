@@ -105,6 +105,10 @@ export interface CreditMethods {
   ) => Promise<LedgerPage>;
   rebuildBalance: (userId: string | Types.ObjectId) => Promise<CreditBalanceView>;
   recordJobCost: (params: RecordJobCostParams) => Promise<ICostLog>;
+  correctLotCostBasis: (
+    lotId: string | Types.ObjectId,
+    costBasisMicroRon: number,
+  ) => Promise<boolean>;
 }
 
 export function createCreditMethods(mongoose: typeof import('mongoose')): CreditMethods {
@@ -601,10 +605,52 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): Credit
     );
   }
 
+  /**
+   * Replaces an estimated cost basis with the real one, once Stripe's balance
+   * transaction has settled.
+   *
+   * **Refuses on a lot that has already been spent against**, and says so by
+   * returning false. The ledger is append-only and its `allocations` copy the basis
+   * at the moment of spend; correcting the lot after a debit would leave the two
+   * disagreeing, and a margin report reading a basis that no allocation reflects is
+   * worse than one reading a slightly stale estimate.
+   *
+   * The `creditsRemaining: creditsGranted` guard is expressed in the query rather
+   * than checked first, so a concurrent spend cannot slip between the check and the
+   * write.
+   */
+  async function correctLotCostBasis(
+    lotId: string | Types.ObjectId,
+    costBasisMicroRon: number,
+  ): Promise<boolean> {
+    const lot = await getLot().findById(lotId).lean();
+    if (!lot) {
+      return false;
+    }
+
+    const result = await getLot().updateOne(
+      { _id: lotId, creditsRemaining: lot.creditsGranted },
+      { $set: { costBasisMicroRon } },
+    );
+
+    if (result.modifiedCount !== 1) {
+      return false;
+    }
+
+    await getLedger().updateOne(
+      { 'allocations.lotId': lotId, type: 'purchase' },
+      { $set: { 'allocations.$[entry].costBasisMicroRon': costBasisMicroRon } },
+      { arrayFilters: [{ 'entry.lotId': lotId }] },
+    );
+
+    return true;
+  }
+
   return {
     ensureCreditBalance,
     getCreditBalance,
     grantCredits,
+    correctLotCostBasis,
     holdCredits,
     settleHold,
     releaseHold,
