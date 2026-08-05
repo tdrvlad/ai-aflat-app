@@ -8,6 +8,7 @@ import { ErrorMessage } from '~/components/Auth/ErrorMessage';
 import SocialButton from '~/components/Auth/SocialButton';
 import { useAuthContext } from '~/hooks/AuthContext';
 import { useLocalize } from '~/hooks';
+import useEmbeddedClerk from '~/components/Aflat/Auth/useEmbeddedClerk';
 import ClerkSignIn from '~/components/Aflat/Auth/ClerkSignIn';
 import LoginForm from './LoginForm';
 
@@ -68,10 +69,10 @@ function Login() {
    * fallback, which is the escape hatch if the exchange ever misbehaves.
    */
   const clerkPublishableKey = startupConfig?.clerkPublishableKey ?? null;
-  const useEmbeddedClerk = Boolean(clerkPublishableKey) && !isAutoRedirectDisabled;
+  const embeddedClerk = useEmbeddedClerk(clerkPublishableKey);
 
   const shouldAutoRedirect =
-    !useEmbeddedClerk &&
+    !embeddedClerk &&
     startupConfig?.openidLoginEnabled &&
     startupConfig?.openidAutoRedirect &&
     startupConfig?.serverDomain &&
@@ -111,7 +112,7 @@ function Login() {
     );
   }
 
-  if (useEmbeddedClerk && clerkPublishableKey) {
+  if (embeddedClerk && clerkPublishableKey) {
     return (
       <>
         {error != null && <ErrorMessage>{localize(getLoginError(error))}</ErrorMessage>}

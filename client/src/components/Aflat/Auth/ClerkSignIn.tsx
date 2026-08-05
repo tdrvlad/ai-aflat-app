@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { roRO } from '@clerk/localizations';
 import { ClerkProvider, SignIn, useAuth } from '@clerk/clerk-react';
 import { apiBaseUrl, request } from 'librechat-data-provider';
 import { useLocalize } from '~/hooks';
@@ -87,7 +88,8 @@ export default function ClerkSignIn({ publishableKey }: { publishableKey: string
   const message = localize((failure && FAILURE_KEYS[failure]) || 'com_aflat_auth_exchange_failed');
 
   return (
-    <ClerkProvider publishableKey={publishableKey}>
+    /* Clerk ships its own copy; without this the first screen a user sees is English. */
+    <ClerkProvider publishableKey={publishableKey} localization={roRO}>
       <ClerkHandoff onFailed={setFailure} />
 
       {failure != null && (

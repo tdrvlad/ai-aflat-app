@@ -3,6 +3,7 @@ import { TStartupConfig } from 'librechat-data-provider';
 import { BrandLockup, APP_NAME } from '~/components/Brand';
 import { ErrorMessage } from '~/components/Auth/ErrorMessage';
 import { TranslationKeys, useLocalize } from '~/hooks';
+import useEmbeddedClerk from '~/components/Aflat/Auth/useEmbeddedClerk';
 import SocialLoginRender from './SocialLoginRender';
 import { BlinkAnimation } from './BlinkAnimation';
 import { Banner } from '../Banners';
@@ -26,6 +27,7 @@ function AuthLayout({
   error: TranslationKeys | null;
 }) {
   const localize = useLocalize();
+  const embeddedClerk = useEmbeddedClerk(startupConfig?.clerkPublishableKey);
 
   const hasStartupConfigError = startupConfigError !== null && startupConfigError !== undefined;
   const DisplayError = () => {
@@ -84,7 +86,13 @@ function AuthLayout({
             </h1>
           )}
           {children}
-          {!pathname.includes('2fa') &&
+          {/**
+           * ai-aflat: the embedded widget already offers Google, Facebook and
+           * email. Rendering these underneath it repeats those providers and adds
+           * a redirect to Clerk's hosted page — a second door to the same room.
+           */}
+          {!embeddedClerk &&
+            !pathname.includes('2fa') &&
             (pathname.includes('login') || pathname.includes('register')) && (
               <SocialLoginRender startupConfig={startupConfig} />
             )}

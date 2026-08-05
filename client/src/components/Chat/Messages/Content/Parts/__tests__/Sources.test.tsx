@@ -167,7 +167,7 @@ describe('Sources', () => {
 
     const actLink = screen.getByTestId('aflat-act-link');
     expect(actLink).toHaveAttribute('href', LABOUR_CODE.url);
-    expect(actLink).toHaveTextContent('Open on legislatie.just.ro');
+    expect(actLink).toHaveTextContent('View the act on legislatie.just.ro');
   });
 
   it('falls back to the official link as primary when there is no viewer url', () => {
@@ -257,7 +257,7 @@ describe('Sources', () => {
 
     expect(screen.getByTestId('aflat-act-amending')).toHaveTextContent('amending act');
     expect(screen.getByTestId('aflat-act-amending-note')).toHaveTextContent(
-      'This act amends another act.',
+      'it changes another law',
     );
   });
 
@@ -308,7 +308,7 @@ describe('Sources', () => {
       );
       expect(screen.getByTestId('aflat-act-amending')).toHaveTextContent('act de modificare');
       expect(screen.getByTestId('aflat-act-amending-note')).toHaveTextContent(
-        'Acest act modifică un alt act.',
+        'el schimbă o altă lege',
       );
       expect(screen.getAllByTestId('aflat-provision-link')[0]).toHaveTextContent(
         'Deschide articolul',
