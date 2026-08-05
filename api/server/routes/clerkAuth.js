@@ -5,12 +5,12 @@ const {
   isEmailDomainAllowed,
   verifyClerkToken,
   getClerkIssuer,
+  getBalanceConfig,
   isClerkEmbedConfigured,
   ClerkVerificationError,
 } = require('@librechat/api');
 const { getAppConfig } = require('~/server/services/Config');
 const { setAuthTokens } = require('~/server/services/AuthService');
-const { getBalanceConfig } = require('~/server/services/Config');
 const { findUser, createUser } = require('~/models');
 const { checkBan } = require('~/server/middleware');
 
