@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
-import { MCPIcon, AttachmentIcon, OpenAIMinimalIcon } from '@librechat/client';
+import { AttachmentIcon } from '@librechat/client';
 import {
-  Bot,
   Brain,
   Bookmark,
   NotebookPen,
@@ -15,20 +14,11 @@ import {
   PermissionTypes,
   isParamEndpoint,
   isAgentsEndpoint,
-  isAssistantsEndpoint,
 } from 'librechat-data-provider';
 import type { TInterfaceConfig, TEndpointsConfig } from 'librechat-data-provider';
 import type { NavLink } from '~/common';
-import {
-  useAgentCapabilities,
-  useMCPServerManager,
-  useGetAgentsConfig,
-  useHasAccess,
-} from '~/hooks';
-import MCPBuilderPanel from '~/components/SidePanel/MCPBuilder/MCPBuilderPanel';
-import AgentPanelSwitch from '~/components/SidePanel/Agents/AgentPanelSwitch';
+import { useAgentCapabilities, useGetAgentsConfig, useHasAccess } from '~/hooks';
 import BookmarkPanel from '~/components/SidePanel/Bookmarks/BookmarkPanel';
-import PanelSwitch from '~/components/SidePanel/Builder/PanelSwitch';
 import Parameters from '~/components/SidePanel/Parameters/Panel';
 import { MemoryPanel } from '~/components/SidePanel/Memories';
 import FilesPanel from '~/components/SidePanel/Files/Panel';
@@ -72,63 +62,12 @@ export default function useSideNavLinks({
     permissionType: PermissionTypes.MEMORIES,
     permission: Permissions.READ,
   });
-  const hasAccessToAgents = useHasAccess({
-    permissionType: PermissionTypes.AGENTS,
-    permission: Permissions.USE,
-  });
-  const hasAccessToCreateAgents = useHasAccess({
-    permissionType: PermissionTypes.AGENTS,
-    permission: Permissions.CREATE,
-  });
-  const hasAccessToUseMCPSettings = useHasAccess({
-    permissionType: PermissionTypes.MCP_SERVERS,
-    permission: Permissions.USE,
-  });
-  const hasAccessToCreateMCP = useHasAccess({
-    permissionType: PermissionTypes.MCP_SERVERS,
-    permission: Permissions.CREATE,
-  });
-  const { availableMCPServers } = useMCPServerManager();
 
   const { agentsConfig } = useGetAgentsConfig({ endpointsConfig });
   const { skillsEnabled } = useAgentCapabilities(agentsConfig?.capabilities);
 
   const Links = useMemo(() => {
     const links: NavLink[] = [];
-
-    if (
-      endpointsConfig?.[EModelEndpoint.agents] &&
-      hasAccessToAgents &&
-      hasAccessToCreateAgents &&
-      endpointsConfig[EModelEndpoint.agents].disableBuilder !== true
-    ) {
-      links.push({
-        title: 'com_sidepanel_agent_builder',
-        label: '',
-        icon: Bot,
-        id: EModelEndpoint.agents,
-        Component: AgentPanelSwitch,
-      });
-    }
-
-    if (
-      isAssistantsEndpoint(endpoint) &&
-      ((endpoint === EModelEndpoint.assistants &&
-        endpointsConfig?.[EModelEndpoint.assistants] &&
-        endpointsConfig[EModelEndpoint.assistants].disableBuilder !== true) ||
-        (endpoint === EModelEndpoint.azureAssistants &&
-          endpointsConfig?.[EModelEndpoint.azureAssistants] &&
-          endpointsConfig[EModelEndpoint.azureAssistants].disableBuilder !== true)) &&
-      keyProvided
-    ) {
-      links.push({
-        title: 'com_sidepanel_assistant_builder',
-        label: '',
-        icon: OpenAIMinimalIcon,
-        id: EModelEndpoint.assistants,
-        Component: PanelSwitch,
-      });
-    }
 
     if (hasAccessToSkills && skillsEnabled) {
       links.push({
@@ -193,19 +132,6 @@ export default function useSideNavLinks({
       });
     }
 
-    if (
-      (hasAccessToUseMCPSettings && availableMCPServers && availableMCPServers.length > 0) ||
-      hasAccessToCreateMCP
-    ) {
-      links.push({
-        title: 'com_nav_setting_mcp',
-        label: '',
-        icon: MCPIcon,
-        id: 'mcp-builder',
-        Component: MCPBuilderPanel,
-      });
-    }
-
     if (includeHidePanel && hidePanel) {
       links.push({
         title: 'com_sidepanel_hide_panel',
@@ -219,10 +145,7 @@ export default function useSideNavLinks({
     return links;
   }, [
     endpoint,
-    endpointsConfig,
     keyProvided,
-    hasAccessToAgents,
-    hasAccessToCreateAgents,
     hasAccessToPrompts,
     hasAccessToSkills,
     skillsEnabled,
@@ -231,9 +154,6 @@ export default function useSideNavLinks({
     interfaceConfig.parameters,
     endpointType,
     hasAccessToBookmarks,
-    availableMCPServers,
-    hasAccessToUseMCPSettings,
-    hasAccessToCreateMCP,
     includeHidePanel,
     hidePanel,
   ]);

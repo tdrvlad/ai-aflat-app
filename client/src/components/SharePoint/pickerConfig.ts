@@ -1,3 +1,11 @@
+/**
+ * SharePoint file-picker SDK types.
+ *
+ * ai-aflat: moved here from `components/SidePanel/Agents/config.ts` on 2026-08-06 when the agent
+ * builder was deleted. Nothing about these types was ever agent-specific — they describe
+ * Microsoft's picker post-message protocol, and `hooks/Files/useSharePointPicker.ts` is their only
+ * consumer. They live next to that consumer now.
+ */
 /* eslint-disable @typescript-eslint/no-empty-object-type */
 export type ExtFilters =
   | 'folder'
