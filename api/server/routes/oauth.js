@@ -61,57 +61,12 @@ router.get('/error', (req, res) => {
 });
 
 /**
- * Google Routes
- */
-router.get(
-  '/google',
-  passport.authenticate('google', {
-    scope: ['openid', 'profile', 'email'],
-    session: false,
-  }),
-);
-
-router.get(
-  '/google/callback',
-  passport.authenticate('google', {
-    failureRedirect: `${domains.client}/oauth/error`,
-    failureMessage: true,
-    session: false,
-    scope: ['openid', 'profile', 'email'],
-  }),
-  setBalanceConfig,
-  checkDomainAllowed,
-  oauthHandler,
-);
-
-/**
- * Facebook Routes
- */
-router.get(
-  '/facebook',
-  passport.authenticate('facebook', {
-    scope: ['public_profile'],
-    profileFields: ['id', 'email', 'name'],
-    session: false,
-  }),
-);
-
-router.get(
-  '/facebook/callback',
-  passport.authenticate('facebook', {
-    failureRedirect: `${domains.client}/oauth/error`,
-    failureMessage: true,
-    session: false,
-    scope: ['public_profile'],
-    profileFields: ['id', 'email', 'name'],
-  }),
-  setBalanceConfig,
-  checkDomainAllowed,
-  oauthHandler,
-);
-
-/**
- * OpenID Routes
+ * OpenID Routes -- the only provider left.
+ *
+ * ai-aflat: the Google, Facebook, GitHub, Discord, Apple and SAML route pairs were deleted on
+ * 2026-08-06 together with their strategies. They were unreachable (no strategy registered without
+ * its env vars) but a route that 404s on a missing strategy is still a route someone can wire back
+ * up by accident. Identity is Clerk; Google sign-in is brokered by Clerk through this OpenID pair.
  */
 router.get('/openid', (req, res, next) => {
   return passport.authenticate('openid', {
@@ -125,96 +80,6 @@ router.get(
   authenticateOpenIDCallback,
   setBalanceConfig,
   checkDomainAllowed,
-  oauthHandler,
-);
-
-/**
- * GitHub Routes
- */
-router.get(
-  '/github',
-  passport.authenticate('github', {
-    scope: ['user:email', 'read:user'],
-    session: false,
-  }),
-);
-
-router.get(
-  '/github/callback',
-  passport.authenticate('github', {
-    failureRedirect: `${domains.client}/oauth/error`,
-    failureMessage: true,
-    session: false,
-    scope: ['user:email', 'read:user'],
-  }),
-  setBalanceConfig,
-  checkDomainAllowed,
-  oauthHandler,
-);
-
-/**
- * Discord Routes
- */
-router.get(
-  '/discord',
-  passport.authenticate('discord', {
-    scope: ['identify', 'email'],
-    session: false,
-  }),
-);
-
-router.get(
-  '/discord/callback',
-  passport.authenticate('discord', {
-    failureRedirect: `${domains.client}/oauth/error`,
-    failureMessage: true,
-    session: false,
-    scope: ['identify', 'email'],
-  }),
-  setBalanceConfig,
-  checkDomainAllowed,
-  oauthHandler,
-);
-
-/**
- * Apple Routes
- */
-router.get(
-  '/apple',
-  passport.authenticate('apple', {
-    session: false,
-  }),
-);
-
-router.post(
-  '/apple/callback',
-  passport.authenticate('apple', {
-    failureRedirect: `${domains.client}/oauth/error`,
-    failureMessage: true,
-    session: false,
-  }),
-  setBalanceConfig,
-  checkDomainAllowed,
-  oauthHandler,
-);
-
-/**
- * SAML Routes
- */
-router.get(
-  '/saml',
-  passport.authenticate('saml', {
-    session: false,
-  }),
-);
-
-router.post(
-  '/saml/callback',
-  passport.authenticate('saml', {
-    failureRedirect: `${domains.client}/oauth/error`,
-    failureMessage: true,
-    session: false,
-  }),
   oauthHandler,
 );
 

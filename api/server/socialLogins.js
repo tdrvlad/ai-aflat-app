@@ -3,21 +3,7 @@ const session = require('express-session');
 const { CacheKeys } = require('librechat-data-provider');
 const { math, isEnabled, shouldUseSecureCookie } = require('@librechat/api');
 const { logger, DEFAULT_SESSION_EXPIRY } = require('@librechat/data-schemas');
-const {
-  openIdJwtLogin,
-  facebookLogin,
-  facebookAdminLogin,
-  discordLogin,
-  discordAdminLogin,
-  setupOpenId,
-  googleLogin,
-  googleAdminLogin,
-  githubLogin,
-  githubAdminLogin,
-  appleLogin,
-  appleAdminLogin,
-  setupSaml,
-} = require('~/strategies');
+const { openIdJwtLogin, setupOpenId } = require('~/strategies');
 const { getLogStores } = require('~/cache');
 
 const DEFAULT_OPENID_REUSE_MAX_SESSION_AGE_MS = 15 * 60 * 1000;
@@ -75,29 +61,24 @@ async function configureOpenId(app) {
  *
  * @param {Express.Application} app
  */
+/**
+ * ai-aflat: OpenID is the only strategy left, and it is Clerk.
+ *
+ * Everything else this function used to configure -- Google, Facebook, GitHub, Discord, Apple and
+ * SAML -- was deleted on 2026-08-06 along with its strategy files. None of it was ever configured,
+ * and none of it can be: identity is Clerk, reached through the stock OpenID Connect strategy.
+ * Google sign-in still works and still says "Google" to the user; it is brokered by Clerk rather
+ * than negotiated here.
+ *
+ * The name is now a slight lie -- there is one "social" login and it is a federated identity
+ * provider. Kept as-is because it is the boot-chain entry point and renaming it would touch the
+ * server bootstrap for no behavioural gain.
+ *
+ * @param {Express.Application} app
+ */
 const configureSocialLogins = async (app) => {
-  logger.info('Configuring social logins...');
+  logger.info('Configuring OpenID (Clerk)...');
 
-  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-    passport.use(googleLogin());
-    passport.use('googleAdmin', googleAdminLogin());
-  }
-  if (process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET) {
-    passport.use(facebookLogin());
-    passport.use('facebookAdmin', facebookAdminLogin());
-  }
-  if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
-    passport.use(githubLogin());
-    passport.use('githubAdmin', githubAdminLogin());
-  }
-  if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
-    passport.use(discordLogin());
-    passport.use('discordAdmin', discordAdminLogin());
-  }
-  if (process.env.APPLE_CLIENT_ID && process.env.APPLE_PRIVATE_KEY_PATH) {
-    passport.use(appleLogin());
-    passport.use('appleAdmin', appleAdminLogin());
-  }
   if (
     process.env.OPENID_CLIENT_ID &&
     (isEnabled(process.env.OPENID_USE_PKCE) || process.env.OPENID_CLIENT_SECRET?.trim()) &&
@@ -106,30 +87,6 @@ const configureSocialLogins = async (app) => {
     process.env.OPENID_SESSION_SECRET
   ) {
     await configureOpenId(app);
-  }
-  if (
-    process.env.SAML_ENTRY_POINT &&
-    process.env.SAML_ISSUER &&
-    process.env.SAML_CERT &&
-    process.env.SAML_SESSION_SECRET
-  ) {
-    logger.info('Configuring SAML Connect...');
-    const sessionExpiry = getSessionExpiry();
-    const sessionOptions = {
-      secret: process.env.SAML_SESSION_SECRET,
-      resave: false,
-      saveUninitialized: false,
-      store: getLogStores(CacheKeys.SAML_SESSION),
-      cookie: {
-        maxAge: sessionExpiry,
-        secure: shouldUseSecureCookie(),
-      },
-    };
-    app.use(session(sessionOptions));
-    app.use(passport.session());
-    setupSaml();
-
-    logger.info('SAML Connect configured.');
   }
 };
 
