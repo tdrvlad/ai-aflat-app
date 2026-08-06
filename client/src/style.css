@@ -3129,6 +3129,22 @@ html {
   );
 }
 
+/* The tricolor hairline. Reserved for the top edge of the two dialogs that
+   interrupt the journey — the acknowledgement gate and the login gate — where it
+   is the only ornament and carries the brand without a second logo. Full
+   saturation on purpose: these are the flag's colours, not the theme's, so they
+   do not follow the semantic tokens and must not be reused as decoration
+   anywhere a lighter touch would do. */
+.aa-tricolor {
+  height: 4px;
+  background-image: linear-gradient(
+    90deg,
+    #b42b30 0 33.3%,
+    #f2c438 33.3% 66.6%,
+    #1e56a0 66.6% 100%
+  );
+}
+
 /* Motion. Durations/easings per the spec's timing table; every one of these is
    disabled wholesale by the prefers-reduced-motion block at the end. */
 @keyframes aa-rise {

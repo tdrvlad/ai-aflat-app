@@ -68,10 +68,15 @@ const isValidThemeColors = (value: unknown): value is IThemeRGB => {
 };
 
 /**
- * Get initial theme from localStorage or default to 'system'
+ * Get initial theme from localStorage, defaulting to light.
+ *
+ * ai-aflat: upstream defaults to 'system', which hands the first impression to the visitor's OS —
+ * and a majority of desktops now ship dark. The Pânza identity is a light, paper-toned brand, so
+ * following the OS means most people who have never been here see a palette the brand was not
+ * drawn in. A stored preference still wins, so the theme toggle keeps working exactly as before.
  */
 const getInitialTheme = (): string => {
-  if (typeof window === 'undefined') return 'system';
+  if (typeof window === 'undefined') return 'light';
   try {
     const stored = localStorage.getItem(THEME_KEY);
     if (stored && ['light', 'dark', 'system'].includes(stored)) {
@@ -80,7 +85,7 @@ const getInitialTheme = (): string => {
   } catch {
     // localStorage not available
   }
-  return 'system';
+  return 'light';
 };
 
 /**

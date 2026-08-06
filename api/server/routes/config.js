@@ -14,6 +14,7 @@ const { hasCapability } = require('~/server/middleware/roles/capabilities');
 const { getLdapConfig } = require('~/server/services/Config/ldap');
 const { getRumConfig } = require('~/server/services/Config/rum');
 const { getAppConfig } = require('~/server/services/Config/app');
+const { isDevAutoLoginEnabled } = require('./devAuth');
 
 const router = express.Router();
 const emailLoginEnabled =
@@ -85,6 +86,12 @@ function buildPreLoginPayload() {
      * keys are public by construction — this is not a secret leak.
      */
     clerkPublishableKey: process.env.CLERK_PUBLISHABLE_KEY || null,
+    /**
+     * ai-aflat: LOCAL DEVELOPMENT ONLY — the client skips the login modal and
+     * signs itself in. Computed by the route that implements it, so the two can
+     * never disagree about whether the door is open.
+     */
+    devAutoLogin: isDevAutoLoginEnabled(),
     samlLoginEnabled: !isOpenIdEnabled && isSamlEnabled,
     samlLabel: process.env.SAML_BUTTON_LABEL,
     samlImageUrl: process.env.SAML_IMAGE_URL,

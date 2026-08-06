@@ -612,16 +612,22 @@ describe('AuthContextProvider — anonymous visitors land on the ask gate', () =
     window.history.replaceState({}, '', '/');
   });
 
-  it('sends a visitor with no token to /ask', () => {
+  /**
+   * There is one chat screen and being signed out is a state of it, so an
+   * anonymous visitor stays on `/c/new` and gets the anonymous surface rendered
+   * in place. Pinned because a bounce here would silently reintroduce the second
+   * screen the redesign removed.
+   */
+  it('leaves a visitor with no token on the chat screen', () => {
     window.history.replaceState({}, '', '/c/new');
     runSilentRefresh('no-token');
-    expect(mockNavigate).toHaveBeenCalledWith('/ask');
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it('sends a visitor whose refresh failed to /ask', () => {
+  it('leaves a visitor whose refresh failed on the chat screen', () => {
     window.history.replaceState({}, '', '/c/new');
     runSilentRefresh('error');
-    expect(mockNavigate).toHaveBeenCalledWith('/ask');
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('leaves a visitor already on /login alone (no bounce off the sign-in page)', () => {

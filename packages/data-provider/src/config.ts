@@ -1388,6 +1388,8 @@ export type TStartupConfig = {
   emailLoginEnabled: boolean;
   /** ai-aflat: null when embedded Clerk sign-in is not configured. */
   clerkPublishableKey?: string | null;
+  /** ai-aflat: LOCAL DEVELOPMENT ONLY — sign-in is bypassed. Never true in production. */
+  devAutoLogin?: boolean;
   registrationEnabled: boolean;
   socialLoginEnabled: boolean;
   passwordResetEnabled: boolean;

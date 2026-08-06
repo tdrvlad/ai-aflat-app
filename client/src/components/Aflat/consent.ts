@@ -18,6 +18,8 @@ import type { UseQueryResult } from '@tanstack/react-query';
 export const CONSENT_WORDING_VERSION = 'v2-2026-08';
 
 export const PRIVACY_POLICY_URL = 'https://ai-aflat.ro/confidentialitate';
+export const TERMS_URL = 'https://ai-aflat.ro/termeni';
+export const GUIDES_URL = 'https://ai-aflat.ro/ghid';
 
 export const consentStatusKey = ['aflat', 'consent-status'] as const;
 

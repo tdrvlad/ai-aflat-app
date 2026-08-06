@@ -19,8 +19,6 @@ import LoginLayout from './Layouts/Login';
 import dashboardRoutes from './Dashboard';
 import ShareRoute from './ShareRoute';
 import ChatRoute from './ChatRoute';
-import AnonAsk from './AnonAsk';
-import Welcome from './Welcome';
 import Search from './Search';
 import Root from './Root';
 
@@ -64,29 +62,29 @@ const baseHref = baseEl?.getAttribute('href') || '/';
 
 export const router = createBrowserRouter(
   [
+    /**
+     * Tombstones for the two screens the redesign removed.
+     *
+     * `/ask` and `/welcome` were the „defined twice" problem — separate front
+     * doors for a signed-out visitor, when being signed out is a state of the
+     * chat screen rather than a different destination. The screens are gone, but
+     * the URLs survive in browser history and bookmarks, and without these they
+     * would land on the router's raw 404 instead of the app.
+     *
+     * They redirect rather than render, and sit above the auth layout so nothing
+     * boots on the way through. Safe to delete once no one is holding the links.
+     */
+    {
+      path: 'ask',
+      element: <Navigate to="/c/new" replace={true} />,
+    },
+    {
+      path: 'welcome',
+      element: <Navigate to="/c/new" replace={true} />,
+    },
     {
       path: 'share/:shareId',
       element: <ShareRoute />,
-      errorElement: <RouteErrorBoundary />,
-    },
-    {
-      /**
-       * ai-aflat: where an unauthenticated visitor lands. Says what the product is
-       * and states the legal-information framing before anything is asked, so the
-       * framing no longer has to interrupt the first send. Same standalone
-       * treatment as `/ask` — no session, no auth context.
-       */
-      path: 'welcome',
-      element: <Welcome />,
-      errorElement: <RouteErrorBoundary />,
-    },
-    {
-      /**
-       * ai-aflat: the public ask gate. Deliberately outside `AuthLayout` — it must
-       * render with no session, no auth context and no authenticated queries.
-       */
-      path: 'ask',
-      element: <AnonAsk />,
       errorElement: <RouteErrorBoundary />,
     },
     {

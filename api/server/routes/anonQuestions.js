@@ -105,7 +105,7 @@ const clearClaimCookies = (res) => {
  * script.
  */
 router.post('/', anonQuestionLimiter, async (req, res) => {
-  const { text, ackVersion } = req.body ?? {};
+  const { text, ackVersion, gdprAccepted, framingAccepted } = req.body ?? {};
 
   if (
     typeof text !== 'string' ||
@@ -117,11 +117,25 @@ router.post('/', anonQuestionLimiter, async (req, res) => {
     return res.status(400).json({ error: 'invalid question' });
   }
 
+  /**
+   * The basis for storing the text at all, so it is checked here rather than
+   * left to schema validation: both acknowledgements must be present and true
+   * before a single byte of a stranger's legal problem is written. A request
+   * without them is a client that skipped the gate, and the right answer is to
+   * refuse the write, not to store the question and record that it was
+   * unacknowledged.
+   */
+  if (gdprAccepted !== true || framingAccepted !== true) {
+    return res.status(400).json({ error: 'acknowledgement required' });
+  }
+
   try {
     const claimToken = crypto.randomBytes(32).toString('base64url');
     const doc = await AnonQuestion.create({
       text: text.trim(),
       ackVersion,
+      gdprAccepted: true,
+      framingAccepted: true,
       claimTokenHash: hashClaimToken(claimToken),
     });
     await recordProductEvent('question_submitted', { meta: { anon: true } });

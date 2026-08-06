@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { ErrorTypes, registerPage } from 'librechat-data-provider';
 import { OpenIDIcon, useToastContext } from '@librechat/client';
-import { useOutletContext, useSearchParams, useLocation } from 'react-router-dom';
+import { useOutletContext, useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import type { TLoginLayoutContext } from '~/common';
-import { getLoginError, persistRedirectToSession } from '~/utils';
+import { getLoginError, getPostLoginRedirect, persistRedirectToSession } from '~/utils';
 import { ErrorMessage } from '~/components/Auth/ErrorMessage';
 import SocialButton from '~/components/Auth/SocialButton';
 import { useAuthContext } from '~/hooks/AuthContext';
@@ -23,6 +23,7 @@ function Login() {
   const { startupConfig } = useOutletContext<TLoginLayoutContext>();
 
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const location = useLocation();
   const disableAutoRedirect = searchParams.get('redirect') === 'false';
 
@@ -116,7 +117,19 @@ function Login() {
     return (
       <>
         {error != null && <ErrorMessage>{localize(getLoginError(error))}</ErrorMessage>}
-        <ClerkSignIn publishableKey={clerkPublishableKey} />
+        {/**
+         * The widget no longer reloads the page on success, so this route has to
+         * name its own destination. In the redesigned journey the widget lives in
+         * a modal over the chat and closes in place; `/login` is the door for
+         * someone arriving cold or returning to a deep link, and only that door
+         * navigates.
+         */}
+        <ClerkSignIn
+          publishableKey={clerkPublishableKey}
+          onSignedIn={() =>
+            navigate(getPostLoginRedirect(searchParams) ?? '/c/new', { replace: true })
+          }
+        />
       </>
     );
   }

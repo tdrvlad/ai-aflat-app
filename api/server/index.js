@@ -256,6 +256,9 @@ const startServer = async () => {
   app.use('/api/aflat/credits', routes.credits);
   /* ai-aflat — exchanges a verified Clerk session for a LibreChat one. */
   app.use('/api/aflat/auth', routes.clerkAuth);
+  /* ai-aflat — LOCAL DEVELOPMENT ONLY: skips sign-in. Inert unless
+   * AFLAT_DEV_AUTOLOGIN=true outside production; see routes/devAuth.js. */
+  app.use('/api/aflat/auth', routes.devAuth);
   /* API Endpoints */
   app.use('/api/auth', preAuthTenantMiddleware, routes.auth);
   app.use('/api/admin', routes.adminAuth);

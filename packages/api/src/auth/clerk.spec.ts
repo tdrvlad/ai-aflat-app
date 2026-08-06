@@ -114,4 +114,29 @@ describe('verifyClerkToken', () => {
 
     expect(claims.emailVerified).toBe(false);
   });
+
+  /**
+   * The claim is authored by hand in Clerk's session-token editor, where
+   * `"{{user.email_verified}}"` interpolates inside the quotes and arrives as a
+   * string. Same signed token either way, so the string counts.
+   */
+  it('accepts email_verified as the string a session-token template produces', async () => {
+    const token = sign({ sub: 'user_abc', email: 'a@b.ro', email_verified: 'true' });
+
+    const claims = await verifyClerkToken(token, ISSUER);
+
+    expect(claims.emailVerified).toBe(true);
+  });
+
+  /** Anything else is still unverified — only an affirmative claim counts. */
+  it.each([['false'], [''], ['1'], [0]])(
+    'treats email_verified %p as unverified',
+    async (value) => {
+      const token = sign({ sub: 'user_abc', email: 'a@b.ro', email_verified: value });
+
+      const claims = await verifyClerkToken(token, ISSUER);
+
+      expect(claims.emailVerified).toBe(false);
+    },
+  );
 });

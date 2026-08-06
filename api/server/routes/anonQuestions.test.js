@@ -91,7 +91,15 @@ const claimTokenFrom = (res) => {
   return decodeURIComponent(value);
 };
 
-const mint = (body, ip = freshIp()) => post('/api/aflat/anon-questions', ip).send(body);
+const mintRaw = (body, ip = freshIp()) => post('/api/aflat/anon-questions', ip).send(body);
+
+/**
+ * Both acknowledgements default to given, because that is the only state in
+ * which the gate ever posts. Tests that care about a missing or refused
+ * acknowledgement use `mintRaw` and say so.
+ */
+const mint = (body, ip = freshIp()) =>
+  mintRaw({ gdprAccepted: true, framingAccepted: true, ...body }, ip);
 
 /** Parks a question the way a visitor's browser does, keeping what it keeps. */
 const park = async (text = 'Cât preaviz am la demisie?') => {
@@ -125,6 +133,8 @@ describe('POST /api/aflat/anon-questions', () => {
     expect(doc).toMatchObject({
       text: 'Cât preaviz am la demisie?',
       ackVersion: 'v1-2026-07',
+      gdprAccepted: true,
+      framingAccepted: true,
       linkedUserId: null,
       linkedConvoId: null,
     });
@@ -167,6 +177,25 @@ describe('POST /api/aflat/anon-questions', () => {
     expect(res.status).toBe(400);
     expect(await AnonQuestion.countDocuments({})).toBe(0);
     /* A rejected question hands out no claim credential either. */
+    expect(setCookieFor(res, CLAIM_COOKIE)).toBeUndefined();
+  });
+
+  it.each([
+    ['both acknowledgements missing', {}],
+    ['only the GDPR acknowledgement', { gdprAccepted: true }],
+    ['only the framing acknowledgement', { framingAccepted: true }],
+    ['the GDPR box refused', { gdprAccepted: false, framingAccepted: true }],
+    ['the framing box refused', { gdprAccepted: true, framingAccepted: false }],
+    ['a truthy value that is not true', { gdprAccepted: 'da', framingAccepted: 'da' }],
+  ])('stores nothing when the gate is skipped: %s', async (_label, ack) => {
+    const res = await mintRaw({ text: 'Întrebare', ackVersion: 'v2-2026-08', ...ack });
+
+    expect(res.status).toBe(400);
+    /**
+     * The refusal screen tells the visitor their question was never kept. That
+     * promise is only true if the write genuinely does not happen.
+     */
+    expect(await AnonQuestion.countDocuments({})).toBe(0);
     expect(setCookieFor(res, CLAIM_COOKIE)).toBeUndefined();
   });
 

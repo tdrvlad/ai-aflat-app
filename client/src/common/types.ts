@@ -496,6 +496,12 @@ export type TAuthContext = {
   logout: (redirect?: string) => void;
   setError: React.Dispatch<React.SetStateAction<string | undefined>>;
   roles?: Record<string, t.TRole | null | undefined>;
+  /**
+   * ai-aflat: adopt a session established out-of-band — a refresh cookie set by
+   * the Clerk token exchange — without navigating or reloading. Resolves to
+   * whether a session was found. See `AuthContextProvider`.
+   */
+  establishSession: () => Promise<boolean>;
 };
 
 export type TUserContext = {

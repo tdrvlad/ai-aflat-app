@@ -1,11 +1,8 @@
 import {
-  ACK_KEY,
-  ACK_VERSION,
+  HANDOFF_MAX_AGE_MS,
   STASH_MAX_AGE_MS,
   clearStash,
-  hasAcked,
   readStash,
-  saveAck,
   saveStash,
 } from '../anonStash';
 
@@ -14,13 +11,15 @@ describe('anonStash', () => {
     localStorage.clear();
   });
 
-  it('pins the acknowledgement key to the wording version', () => {
-    /**
-     * Task 8 reads this key by name and the server stores `ackVersion` verbatim,
-     * so both halves of the contract are pinned here.
-     */
-    expect(ACK_VERSION).toBe('v2-2026-08');
-    expect(ACK_KEY).toBe('aflat_ack_v2-2026-08');
+  /**
+   * A question that was never parked server-side has no owner recorded anywhere,
+   * so its age is the only thing standing between it and the next person to sign
+   * in on a shared browser. It must stay far shorter than the outer stash TTL,
+   * which only the legacy server-parked path still relies on.
+   */
+  it('bounds the automatic re-ask to a single sitting', () => {
+    expect(HANDOFF_MAX_AGE_MS).toBe(30 * 60 * 1000);
+    expect(HANDOFF_MAX_AGE_MS).toBeLessThan(STASH_MAX_AGE_MS);
   });
 
   it('round-trips a stashed question through the contract key', () => {
@@ -128,30 +127,15 @@ describe('anonStash', () => {
     expect(localStorage.getItem('aflat_anon_q')).toBeNull();
   });
 
-  it('records the acknowledgement as an ISO timestamp under the versioned key', () => {
-    expect(hasAcked()).toBe(false);
-
-    saveAck();
-
-    const stored = localStorage.getItem(ACK_KEY);
-    expect(stored).not.toBeNull();
-    expect(new Date(stored!).toISOString()).toBe(stored);
-    expect(hasAcked()).toBe(true);
-  });
-
-  it('does not treat an acknowledgement of another wording version as current', () => {
-    localStorage.setItem('aflat_ack_v0-2026-01', new Date().toISOString());
-    expect(hasAcked()).toBe(false);
-  });
-
   it('reports a successful stash on a healthy store', () => {
     expect(saveStash({ id: 'abc123', text: 'x' })).toBe(true);
   });
 
   /**
-   * Blocked or full storage must never propagate: `saveStash` runs *after* the
-   * question is already parked server-side, so a throw here would be reported
-   * to the visitor as a failed send and invite an orphan-producing retry.
+   * Blocked or full storage must never propagate. It costs the visitor the
+   * automatic re-ask after sign-up and nothing else, so a throw here would be
+   * reported as a failed send — claiming something broke when nothing did, and
+   * inviting a retry that cannot succeed.
    */
   describe('when localStorage throws (site data blocked / quota exceeded)', () => {
     const realSetItem = Storage.prototype.setItem;
@@ -178,10 +162,6 @@ describe('anonStash', () => {
 
     it('clearStash swallows the failure', () => {
       expect(() => clearStash()).not.toThrow();
-    });
-
-    it('saveAck swallows the failure', () => {
-      expect(() => saveAck()).not.toThrow();
     });
   });
 });

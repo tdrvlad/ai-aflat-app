@@ -4,15 +4,22 @@ import { useChatContext } from '~/Providers/ChatContext';
 import { useAuthContext } from '~/hooks/AuthContext';
 import useSubmitMessage from '~/hooks/Messages/useSubmitMessage';
 import { useConsentStatus } from './consent';
-import { clearStash, readStash, saveStash } from './anonStash';
+import { HANDOFF_MAX_AGE_MS, clearStash, readStash, saveStash } from './anonStash';
 
 /**
- * ai-aflat "colectorul", second half: the question a visitor parked at `/ask`
- * before signing up is claimed by the new account and asked for real, so the
- * first thing they see after signing in is their own question being answered.
+ * ai-aflat "colectorul", second half: the question a visitor typed before
+ * signing up is asked for real once they have an account and have accepted the
+ * framing, so the first thing they see after signing in is their own question
+ * being answered.
  *
  * This is the only place in the product that submits a message the user did not
  * just type, so it is deliberately conservative — see the guards below.
+ *
+ * Two sources, in that order of preference. The ordinary one is the browser's
+ * own stash: nothing is stored server-side before consent, so the text the
+ * visitor typed while signed out lives only in `localStorage` until this hook
+ * asks it. The other is the legacy claim, kept because a question parked by an
+ * earlier build can still be sitting on the server inside its 24h window.
  *
  * The claim carries no id. Authorisation is the `aflat_claim` httpOnly cookie
  * the server set when the question was parked; the browser attaches it on its
@@ -270,10 +277,38 @@ export default function usePostLoginHandoff() {
     const claimedStash: PendingQuestion | null =
       stash?.claimed === true && stashed != null && ownedByUser(stashed.uid) ? stashed : null;
 
+    /**
+     * Either signal means a question was parked server-side by an earlier build:
+     * the marker covers the storage-blocked browser, the stash covers a marker
+     * the server has already cleared.
+     */
+    const markerPresent = hasClaimMarker();
+
+    /**
+     * The ordinary case now: a question the visitor typed while signed out,
+     * which was never sent anywhere because there was no consent yet to send it
+     * under. There is no credential to redeem and no server copy to reconcile —
+     * this text is the whole record, so it is asked directly.
+     *
+     * Freshness is the only ownership check available, and it has to be. A
+     * server-parked question could be refused with a 404 when the wrong account
+     * claimed it; this one carries no owner at all, so on a shared browser the
+     * next person to sign in would be handed it. `HANDOFF_MAX_AGE_MS` bounds
+     * that to the single sitting the flow actually describes.
+     */
+    const browserHeld: PendingQuestion | null =
+      !markerPresent &&
+      stash?.claimed !== true &&
+      stashed != null &&
+      typeof stashed.ts === 'number' &&
+      Date.now() - stashed.ts <= HANDOFF_MAX_AGE_MS
+        ? stashed
+        : null;
+
     const pending: PendingQuestion | null =
       state.undelivered != null && ownedByUser(state.undelivered.uid)
         ? state.undelivered
-        : claimedStash;
+        : (claimedStash ?? browserHeld);
 
     /**
      * Keep a question that is ours but could not be asked. Both records are
@@ -323,13 +358,21 @@ export default function usePostLoginHandoff() {
     }
 
     /**
-     * Either signal is enough — the marker covers the storage-blocked browser,
-     * the stash covers a marker the server has already cleared — but with
-     * neither, this account parked nothing and the claim would only burn a
-     * shared rate-limit slot to be told so.
+     * No marker means nothing was ever parked server-side, so there is nothing
+     * to claim — anything this browser holds has already been handled above.
+     * Asking anyway would only burn one of the 10/h/IP claim slots to be told
+     * so, and that budget is shared behind carrier NAT.
      */
-    const markerPresent = hasClaimMarker();
-    if (!markerPresent && stashed == null) {
+    if (!markerPresent) {
+      /**
+       * Nothing above wanted what is in storage — a question stamped for another
+       * account, or one too old to be this visitor's. It can never be delivered
+       * now, so it is dropped rather than left sitting in a shared browser until
+       * it expires on its own.
+       */
+      if (stashed != null) {
+        clearStash();
+      }
       return;
     }
 

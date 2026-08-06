@@ -1,39 +1,47 @@
 /**
- * Local persistence for the anonymous ask gate (`/ask`).
+ * Where an anonymous visitor's question lives between asking it and having an
+ * account to ask it with.
  *
- * Two independent pieces of state, both deliberately in `localStorage` so they
- * survive the round trip through the identity provider:
- *  - the parked question (`aflat_anon_q`), kept so the app can show the visitor
- *    their own question back;
- *  - the acknowledgement of the legal-information framing (`ACK_KEY`), whose
- *    name carries the wording version so a copy change re-asks.
+ * `localStorage`, and *only* `localStorage`, because the question is held before
+ * any consent to hold it exists. Free-text legal questions routinely carry
+ * health, criminal and family detail — Article 9 and Article 10 material — so a
+ * server-side copy taken before the visitor has agreed to anything would need a
+ * lawful basis this product does not have. Keeping it in the browser means the
+ * only pre-consent record is one the person can clear themselves, and it still
+ * survives the round trip through the identity provider, which is all the
+ * handoff needs.
  *
- * The stash is **display state, not a credential.** Authorisation to read a
- * parked question back lives entirely in the `aflat_claim` httpOnly cookie the
- * server sets when the question is parked: `id` is never sent anywhere and
- * proves nothing, and a visitor who hand-edits this key gains no access to
- * anyone's question — the worst they can do is change the text shown to
- * themselves before the server's own copy replaces it.
+ * The stash is **display state, not a credential.** Nothing here authorises
+ * anything: `id` is never sent anywhere, and a visitor who hand-edits this key
+ * buys exactly what typing into the composer buys.
  */
 const STASH_KEY = 'aflat_anon_q';
 
-/** Acknowledgement version — bump the suffix when the ack wording changes. */
-export const ACK_VERSION = 'v2-2026-08';
-export const ACK_KEY = `aflat_ack_${ACK_VERSION}`;
-
 /**
- * How long a parked question stays claimable. Shared browsers are the reason:
- * a visitor who asks and never signs up leaves their question behind, and on a
- * family PC, a library machine or a kiosk the *next* person to sign up would
- * otherwise open their first conversation with a stranger's question — showing
- * them text they never wrote and stamping `anon_questions.linkedUserId` with
- * the wrong subject. A day is long enough for "sign up, confirm the email, come
- * back", short enough that the browser is still the same person's.
+ * How long a stash survives at all.
  *
- * The claim cookie is given the same 24h lifetime server-side, so both halves
- * of the handoff expire together.
+ * Only the legacy claim path — a question parked server-side by an earlier build
+ * — can still be this old, and there the server's own claim window is the real
+ * gate; this is the local half of it, expiring together with the claim cookie.
+ * A browser-held question is subject to the much shorter window below.
  */
 export const STASH_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * How long a browser-held question may still be asked automatically on sign-in.
+ *
+ * Shared browsers are the reason. A question that was never parked server-side
+ * has no owner recorded anywhere, so nothing but its age can tell whether the
+ * person now signing in is the person who typed it — the 404 that used to refuse
+ * a stranger's claim does not exist on this path. On a family PC, a library
+ * machine or a kiosk, a day-old stash would open the next person's first
+ * conversation with someone else's legal question.
+ *
+ * Half an hour is the sitting this flow actually describes: type a question, see
+ * the login modal, create the account, get the answer. Anything older is left
+ * alone rather than asked.
+ */
+export const HANDOFF_MAX_AGE_MS = 30 * 60 * 1000;
 
 /**
  * `id` is retained for continuity (it is what `/ask` gets back when it parks the
@@ -74,12 +82,11 @@ export type AnonStash = {
 
 /**
  * Returns false instead of throwing when storage is unavailable (all site data
- * blocked, quota exceeded). Callers must treat that as non-fatal: by the time
- * this runs the question is already parked server-side and the claim cookie is
- * already set, so a failed stash costs nothing but the local display copy —
- * the post-signup handoff runs off the cookie either way.
- * Throwing here would surface a "couldn't save your question" error after a
- * 201 and invite retries that orphan a document each time.
+ * blocked, quota exceeded). Callers must treat that as non-fatal: it costs the
+ * visitor the automatic re-ask after sign-up, and nothing else — they still get
+ * the account they came for and a composer that works. Reporting it as a failed
+ * send would claim something broke when nothing did, and invite a retry that
+ * cannot succeed.
  *
  * `ts` is stamped on write unless the caller supplies one: the post-login
  * handoff re-parks a question it could not deliver, and re-parking must not
@@ -141,22 +148,4 @@ export const readStash = (): AnonStash | null => {
     return null;
   }
   return stash;
-};
-
-/** True once the visitor has acknowledged the current framing wording. */
-export const hasAcked = (): boolean => {
-  try {
-    return localStorage.getItem(ACK_KEY) != null;
-  } catch {
-    return false;
-  }
-};
-
-/** Records the acknowledgement as an ISO timestamp. */
-export const saveAck = () => {
-  try {
-    localStorage.setItem(ACK_KEY, new Date().toISOString());
-  } catch {
-    /* private-mode storage failures must not block the send */
-  }
 };

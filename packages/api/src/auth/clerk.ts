@@ -113,8 +113,15 @@ export function verifyClerkToken(token: string, issuer: string): Promise<ClerkCl
            * Absent means false. Treating an unknown verification state as verified
            * would hand out the signup bonus to unverified addresses, which is
            * precisely what the bonus gate exists to prevent.
+           *
+           * The string form is accepted because the claim is authored by hand, in
+           * Clerk's session-token editor, as `"{{user.email_verified}}"` — and a
+           * template that interpolates into the quotes yields `"true"` rather than
+           * `true`. Both come from the same signed token, so nothing is loosened;
+           * refusing the string would only mean every new account silently losing
+           * its signup bonus over a pair of quotation marks.
            */
-          emailVerified: claims?.email_verified === true,
+          emailVerified: claims?.email_verified === true || claims?.email_verified === 'true',
           name: typeof claims?.name === 'string' ? claims.name : undefined,
           username: typeof claims?.username === 'string' ? claims.username : undefined,
         });

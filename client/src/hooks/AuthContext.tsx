@@ -32,19 +32,21 @@ import useTimeout from './useTimeout';
 import store from '~/store';
 
 /**
- * ai-aflat: an unauthenticated visitor is sent to the public ask gate rather
- * than to `/login` — signing in is the outcome of parking a question, not the
- * price of admission. Mirrors `~/routes/useAuthRedirect`; both bounce paths must
- * agree or they race each other on a cold load.
+ * ai-aflat: a failed refresh does not move an anonymous visitor anywhere.
  *
- * Keeps upstream's "already on an auth route" guard (the one baked into
- * `buildLoginRedirectUrl`): `/login` and `/login/2fa` render inside this
- * provider, and bouncing them to the gate would make signing in impossible.
+ * There is one chat screen, and being signed out is a state of it rather than a
+ * different destination — so the visitor stays exactly where they are, with the
+ * anonymous surface rendered in place. This replaces a bounce to `/ask`, which
+ * together with `useAuthRedirect`'s bounce to `/welcome` was the „defined twice"
+ * problem: two hooks disagreeing about where a signed-out person belongs. Both
+ * that hook and both destinations are gone.
+ *
+ * `/login` and `/login/2fa` render inside this provider and still need their
+ * upstream guard, or the login route would try to bootstrap itself forever.
  */
-const ANON_GATE_PATH = '/ask';
 const LOGIN_PATH_RE = /(?:^|\/)login(?:\/|$)/;
-const anonRedirectTarget = (): string =>
-  LOGIN_PATH_RE.test(window.location.pathname) ? buildLoginRedirectUrl() : ANON_GATE_PATH;
+const anonRedirectTarget = (): string | null =>
+  LOGIN_PATH_RE.test(window.location.pathname) ? buildLoginRedirectUrl() : null;
 
 const AuthContext = (import.meta.hot?.data?.__AuthContext ??
   createContext<TAuthContext | undefined>(undefined)) as React.Context<TAuthContext | undefined>;
@@ -186,6 +188,41 @@ const AuthContextProvider = ({
     loginUser.mutate(data);
   };
 
+  /**
+   * ai-aflat: turn a session that already exists on the server into an
+   * authenticated app, in place.
+   *
+   * The Clerk exchange leaves nothing in the page — it sets an httpOnly refresh
+   * cookie and returns `{ ok: true }`. Redeeming that cookie here is the same
+   * step `silentRefresh` performs on a cold load, and reusing it means the
+   * embedded login mints no session of its own.
+   *
+   * What it deliberately does *not* do is navigate. `setUserContext` is called
+   * with no `redirect`, so the route, the conversation and the scroll position
+   * are exactly where the user left them when the modal opened — which is the
+   * whole point: the question was parked mid-thread and has to resume there.
+   * A reload would remount the conversation and make the user watch the app boot.
+   */
+  const establishSession = useCallback(
+    () =>
+      new Promise<boolean>((resolve) => {
+        refreshToken.mutate(undefined, {
+          onSuccess: (data: t.TRefreshTokenResponse | undefined) => {
+            const { user, token = '' } = data ?? {};
+            if (!token) {
+              resolve(false);
+              return;
+            }
+            setUserContext({ user, token, isAuthenticated: true });
+            resolve(true);
+          },
+          onError: () => resolve(false),
+        });
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- matches silentRefresh; refreshToken is unstable and re-fires
+    [setUserContext],
+  );
+
   const silentRefresh = useCallback(() => {
     if (authConfig?.test === true) {
       console.log('Test mode. Skipping silent refresh.');
@@ -220,7 +257,10 @@ const AuthContextProvider = ({
         if (authConfig?.test === true) {
           return;
         }
-        navigate(anonRedirectTarget());
+        const target = anonRedirectTarget();
+        if (target != null) {
+          navigate(target);
+        }
       },
       onError: (error) => {
         if (isExternalRedirectRef.current) {
@@ -230,7 +270,10 @@ const AuthContextProvider = ({
         if (authConfig?.test === true) {
           return;
         }
-        navigate(anonRedirectTarget());
+        const target = anonRedirectTarget();
+        if (target != null) {
+          navigate(target);
+        }
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deps are stable at mount; adding refreshToken causes infinite re-fire
@@ -244,7 +287,10 @@ const AuthContextProvider = ({
       setUser(userQuery.data);
     } else if (userQuery.isError) {
       doSetError((userQuery.error as Error).message);
-      navigate(anonRedirectTarget(), { replace: true });
+      const target = anonRedirectTarget();
+      if (target != null) {
+        navigate(target, { replace: true });
+      }
     }
     if (error != null && error && isAuthenticated) {
       doSetError(undefined);
@@ -290,6 +336,7 @@ const AuthContextProvider = ({
       login,
       logout,
       setError,
+      establishSession,
       roles: {
         [SystemRoles.USER]: userRole,
         [SystemRoles.ADMIN]: adminRole,
@@ -303,6 +350,7 @@ const AuthContextProvider = ({
       error,
       isAuthenticated,
       token,
+      establishSession,
       userRole,
       adminRole,
       isCustomRole,

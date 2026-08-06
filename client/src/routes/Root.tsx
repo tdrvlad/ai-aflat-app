@@ -21,7 +21,9 @@ import KeyboardDeleteDialog from '~/components/Nav/KeyboardDeleteDialog';
 import { useUserTermsQuery, useGetStartupConfig } from '~/data-provider';
 import useKeyboardShortcuts from '~/hooks/useKeyboardShortcuts';
 import { UnifiedSidebar } from '~/components/UnifiedSidebar';
+import useDevAutoLogin from '~/components/Aflat/useDevAutoLogin';
 import ConsentModal from '~/components/Aflat/ConsentModal';
+import AnonShell from '~/components/Aflat/AnonShell';
 import { TermsAndConditionsModal } from '~/components/ui';
 import { useHealthCheck } from '~/data-provider';
 import { Banner } from '~/components/Banners';
@@ -45,6 +47,9 @@ export default function Root() {
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
 
   const { isAuthenticated, logout } = useAuthContext();
+
+  /* LOCAL DEVELOPMENT ONLY — no-op unless the server says the door is open. */
+  useDevAutoLogin();
 
   useHealthCheck(isAuthenticated);
 
@@ -74,8 +79,22 @@ export default function Root() {
     logout('/login?redirect=false');
   };
 
+  /**
+   * ai-aflat: an anonymous visitor gets the chat screen, not a bounce.
+   *
+   * Upstream returns `null` here and lets the redirect hooks take the visitor
+   * elsewhere; this fork has one chat screen, and being signed out is a state of
+   * that screen rather than a different destination. The shell is deliberately
+   * leaner than the authenticated one — the providers and sidebar below issue
+   * authenticated queries that are not gated on auth state, so mounting them
+   * without a session would 401 on every load.
+   */
   if (!isAuthenticated) {
-    return null;
+    return (
+      <AnonShell>
+        <Outlet />
+      </AnonShell>
+    );
   }
 
   return (

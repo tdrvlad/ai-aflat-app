@@ -2,6 +2,7 @@ import { memo, useMemo, useState, useCallback, useRef, useId } from 'react';
 import { useAtomValue } from 'jotai';
 import { ContentTypes } from 'librechat-data-provider';
 import type { MouseEvent, FocusEvent } from 'react';
+import ThinkingSteps, { STEP_MARK, hasThinkingSteps } from '~/components/Aflat/ThinkingSteps';
 import { ThinkingContent, ThinkingButton, FloatingThinkingBar } from './Thinking';
 import { useLocalize, useExpandCollapse } from '~/hooks';
 import { showThinkingAtom } from '~/store/showThinking';
@@ -41,7 +42,19 @@ const Reasoning = memo(({ reasoning, isLast, stageLabel }: ReasoningProps) => {
   const contentId = useId();
   const localize = useLocalize();
   const showThinking = useAtomValue(showThinkingAtom);
-  const [isExpanded, setIsExpanded] = useState(showThinking);
+  /**
+   * ai-aflat: the retrieval narration opens by itself.
+   *
+   * Upstream hides thinking behind a click because it is a curiosity — how the
+   * model reasoned. Here it is the opposite: it is the evidence that the answer
+   * came from the corpus and not from the model's memory, naming the acts a lane
+   * actually returned while the user waits ~20s for them. Hidden by default it
+   * proves nothing to the people who most need it proved, and it leaves the wait
+   * looking like a stall. Only *our* stream is opened, so upstream models keep
+   * upstream behaviour.
+   */
+  const isAflatSteps = useMemo(() => hasThinkingSteps(reasoning), [reasoning]);
+  const [isExpanded, setIsExpanded] = useState(showThinking || isAflatSteps);
   const [isBarVisible, setIsBarVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { style: expandStyle, ref: expandRef } = useExpandCollapse(isExpanded);
@@ -54,6 +67,12 @@ const Reasoning = memo(({ reasoning, isLast, stageLabel }: ReasoningProps) => {
       .replace(/\s*<\/think>$/, '')
       .trim();
   }, [reasoning]);
+
+  /** Copied text must not carry the step separators — they are a wire detail. */
+  const copyText = useMemo(
+    () => (isAflatSteps ? reasoningText.split(STEP_MARK).join('') : reasoningText),
+    [isAflatSteps, reasoningText],
+  );
 
   const handleClick = useCallback((e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -86,7 +105,9 @@ const Reasoning = memo(({ reasoning, isLast, stageLabel }: ReasoningProps) => {
     if (stageLabel) {
       return stageLabel;
     }
-    return effectiveIsSubmitting && isLast ? localize('com_ui_thinking') : localize('com_ui_thoughts');
+    return effectiveIsSubmitting && isLast
+      ? localize('com_ui_thinking')
+      : localize('com_ui_thoughts');
   }, [effectiveIsSubmitting, localize, isLast, stageLabel]);
 
   if (!reasoningText) {
@@ -108,7 +129,7 @@ const Reasoning = memo(({ reasoning, isLast, stageLabel }: ReasoningProps) => {
             isExpanded={isExpanded}
             onClick={handleClick}
             label={label}
-            content={reasoningText}
+            content={copyText}
             contentId={contentId}
           />
         </div>
@@ -121,12 +142,19 @@ const Reasoning = memo(({ reasoning, isLast, stageLabel }: ReasoningProps) => {
           style={expandStyle}
         >
           <div className="relative overflow-hidden" ref={expandRef}>
-            <ThinkingContent>{reasoningText}</ThinkingContent>
+            {isAflatSteps ? (
+              <ThinkingSteps
+                text={reasoningText}
+                isStreaming={effectiveIsSubmitting === true && isLast}
+              />
+            ) : (
+              <ThinkingContent>{reasoningText}</ThinkingContent>
+            )}
             <FloatingThinkingBar
               isVisible={isBarVisible && isExpanded}
               isExpanded={isExpanded}
               onClick={handleClick}
-              content={reasoningText}
+              content={copyText}
               contentId={contentId}
             />
           </div>

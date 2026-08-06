@@ -43,6 +43,7 @@ const consents = require('./consents');
 const credits = require('./credits');
 const webhooks = require('./webhooks');
 const clerkAuth = require('./clerkAuth');
+const { router: devAuth } = require('./devAuth');
 
 module.exports = {
   rum,
@@ -90,4 +91,5 @@ module.exports = {
   credits,
   webhooks,
   clerkAuth,
+  devAuth,
 };

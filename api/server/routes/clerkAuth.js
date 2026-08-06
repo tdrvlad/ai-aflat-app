@@ -50,6 +50,28 @@ router.post('/clerk', async (req, res) => {
 
   const email = claims.email ?? '';
 
+  /**
+   * Clerk's session token carries no email address by default — only `sub`,
+   * `sid` and the timing claims. The address has to be added deliberately, in
+   * Clerk Dashboard → Sessions → Customize session token:
+   *
+   *   { "email": "{{user.primary_email_address}}",
+   *     "email_verified": "{{user.email_verified}}" }
+   *
+   * Without it every first sign-in reached `createUser` with a blank email and
+   * died inside Mongoose validation, surfacing as a 500 and, to the person
+   * signing in, as a sign-in that simply did nothing. Refused here instead, with
+   * a code the client can explain, because a configuration gap is not a server
+   * error and must not read like one in the logs.
+   */
+  if (!email) {
+    logger.error(
+      '[auth/clerk] Token carried no email claim — add email to the Clerk session token ' +
+        '(Dashboard → Sessions → Customize session token). Refusing to create an account without one.',
+    );
+    return res.status(422).json({ error: 'email_missing' });
+  }
+
   try {
     const appConfig = await getAppConfig({ baseOnly: true });
 

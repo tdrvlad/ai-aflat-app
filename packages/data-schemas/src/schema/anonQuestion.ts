@@ -13,6 +13,8 @@ export interface IAnonQuestion extends Document {
   text: string;
   ackVersion: string;
   ackTs: Date;
+  gdprAccepted: boolean;
+  framingAccepted: boolean;
   claimTokenHash?: string | null;
   linkedUserId?: Types.ObjectId | null;
   linkedConvoId?: string | null;
@@ -36,6 +38,27 @@ const anonQuestionSchema: Schema<IAnonQuestion> = new Schema(
       type: Date,
       required: true,
       default: Date.now,
+    },
+    /**
+     * The two acknowledgements, stored separately because they are separately
+     * given. One tick covering both a data agreement and a legal-advice
+     * disclaimer is bundled consent, which is the pattern regulators single out;
+     * recording them as one boolean would erase the distinction the UI takes
+     * care to draw.
+     *
+     * They live here rather than in `localStorage` because an acknowledgement
+     * that never reaches the server cannot be evidenced, and clearing site data
+     * erases it. Both are required true — the document is only ever written
+     * after the visitor accepted, so a `false` here would describe a question we
+     * had no basis to store.
+     */
+    gdprAccepted: {
+      type: Boolean,
+      required: true,
+    },
+    framingAccepted: {
+      type: Boolean,
+      required: true,
     },
     /**
      * SHA-256 of the one-time claim token handed to the visitor's browser as an

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { request } from 'librechat-data-provider';
 import usePostLoginHandoff from '../usePostLoginHandoff';
 import { consentStatusKey } from '../consent';
-import { STASH_MAX_AGE_MS, readStash, saveStash } from '../anonStash';
+import { HANDOFF_MAX_AGE_MS, STASH_MAX_AGE_MS, readStash, saveStash } from '../anonStash';
 
 /**
  * The handoff is the one place in the product that sends a message the user did
@@ -330,16 +330,45 @@ describe('usePostLoginHandoff', () => {
    * that spends a claim slot on every load to be told 404 — against a 10/h/IP
    * budget shared behind carrier NAT.
    */
-  it('does not invent a claim marker the server never set', async () => {
+  /**
+   * The ordinary path now. Nothing is stored server-side before consent, so the
+   * question the visitor typed while signed out exists only here — there is no
+   * credential to redeem and no claim to make, and asking anyway would burn one
+   * of the 10/h/IP slots to be told 404.
+   */
+  it('asks a browser-held question directly, without a claim', async () => {
     clearClaimMarker();
-    stashQuestion('Retry me');
-    mockedRequest.post.mockRejectedValue(axiosError(429));
+    stashQuestion('Câte zile de preaviz am?');
 
     renderHandoff();
 
-    await waitFor(() => expect(claimCalls()).toHaveLength(1));
-    await waitFor(() => expect(readStash()).not.toBeNull());
-    expect(document.cookie).not.toContain(MARKER);
+    await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(1));
+    expect(mockSubmitMessage).toHaveBeenCalledWith({ text: 'Câte zile de preaviz am?' });
+    expect(claimCalls()).toHaveLength(0);
+    expect(readStash()).toBeNull();
+  });
+
+  /**
+   * The shared-browser guard on that path. A question that was never parked
+   * server-side carries no owner, so age is the only thing that can tell whether
+   * the person signing in is the one who typed it — the 404 that refuses a
+   * stranger's claim does not exist here. Past the window it is dropped, not
+   * asked, so the next person's first conversation is their own.
+   */
+  it('refuses — and drops — a browser-held question older than the sitting', async () => {
+    clearClaimMarker();
+    saveStash({
+      id: 'q-1',
+      text: 'Pot fi concediat în concediu medical?',
+      ts: Date.now() - HANDOFF_MAX_AGE_MS - 1000,
+    });
+
+    renderHandoff();
+    await settle();
+
+    expect(mockSubmitMessage).not.toHaveBeenCalled();
+    expect(claimCalls()).toHaveLength(0);
+    expect(readStash()).toBeNull();
   });
 
   /**

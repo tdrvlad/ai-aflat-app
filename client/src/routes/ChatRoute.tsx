@@ -25,6 +25,7 @@ import {
 import {
   useAssistantListMap,
   useIdChangeEffect,
+  useAuthContext,
   useAppStartup,
   useNewConvo,
   useLocalize,
@@ -32,7 +33,7 @@ import {
 import { ToolCallsMapProvider } from '~/Providers';
 import ChatView from '~/components/Chat/ChatView';
 import { NotificationSeverity } from '~/common';
-import useAuthRedirect from './useAuthRedirect';
+import AnonChat from '~/components/Aflat/AnonChat';
 import temporaryStore from '~/store/temporary';
 import store from '~/store';
 
@@ -41,7 +42,7 @@ const isValidChatProjectId = (projectId: string | null): projectId is string =>
 
 export default function ChatRoute() {
   const { data: startupConfig } = useGetStartupConfig();
-  const { isAuthenticated, user, roles } = useAuthRedirect();
+  const { isAuthenticated, user, roles } = useAuthContext();
   const queryClient = useQueryClient();
 
   const defaultTemporaryChat = useRecoilValue(temporaryStore.defaultTemporaryChat);
@@ -274,16 +275,28 @@ export default function ChatRoute() {
     conversation?.conversationId,
   ]);
 
+  /**
+   * ai-aflat: signed out is a state of this screen, not a different screen.
+   *
+   * Checked before the loading gate below, because every query on this route is
+   * disabled without a session — and a disabled React Query reports `isLoading`,
+   * so an anonymous visitor would otherwise sit under a spinner forever.
+   *
+   * `onSignedIn` intentionally does nothing but let the render fall through:
+   * `establishSession` has already flipped the auth context in place, so this
+   * component unmounts, `ChatView` mounts in the same tree, and the parked
+   * question is claimed and submitted by `usePostLoginHandoff` in `ChatForm`.
+   */
+  if (!isAuthenticated) {
+    return <AnonChat onSignedIn={() => undefined} />;
+  }
+
   if (endpointsQuery.isLoading || modelsQuery.isLoading) {
     return (
       <div className="flex h-screen items-center justify-center" aria-live="polite" role="status">
         <Spinner className="text-text-primary" />
       </div>
     );
-  }
-
-  if (!isAuthenticated) {
-    return null;
   }
 
   // if not a conversation

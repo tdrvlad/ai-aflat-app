@@ -10,8 +10,15 @@ const router = express.Router();
  * else in the funnel (`question_submitted`, `gate_converted`,
  * `consent_recorded`) is emitted server-side from the route that actually
  * performed the action, so it cannot be forged from the browser.
+ *
+ * `ack_shown` / `ack_declined` bracket the acknowledgement gate, which fires
+ * before anything is stored — so without them a visitor who refuses is invisible
+ * and the drop-off cannot be split between refusing the consent and refusing the
+ * signup. They must never carry the question's length, topic or any other
+ * derived field: the moment a refusal describes the refused text, it has stopped
+ * being a refusal.
  */
-const PUBLIC_EVENT_NAMES = ['gate_shown', 'gate_login_clicked'];
+const PUBLIC_EVENT_NAMES = ['ack_shown', 'ack_declined', 'gate_shown', 'gate_login_clicked'];
 
 /** `meta` is client-supplied on an unauthenticated route: keep it to funnel-sized attributes. */
 const MAX_META_BYTES = 2048;

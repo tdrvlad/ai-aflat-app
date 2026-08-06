@@ -51,6 +51,43 @@ interface:
   bookmarks: false
   multiConvo: false
   agents: false
+  # ai-aflat has exactly one capability: answering a question from retrieved
+  # legislation. Everything below is a LibreChat feature we do not run — there is
+  # no code sandbox, no general web search, no user file corpus, and no memory
+  # store. Offering them would be worse than useless: a user who asks a legal
+  # question with „web search" lit up would reasonably read the answer as sourced
+  # from the open web, when the entire product promise is that it is sourced from
+  # legislatie.just.ro and nothing else.
+  memories: false
+  runCode: false
+  webSearch: false
+  fileSearch: false
+  # Citations of *uploaded files*. Ours are legislative citations, produced by the
+  # orchestrator, and share nothing with this path but the word.
+  fileCitations: false
+  # Public share links, off. This one is not clutter — it is a disclosure risk. A visitor's
+  # question routinely carries health, criminal or family detail (Article 9 / Article 10
+  # material), and a share link publishes the whole conversation to anyone holding the URL.
+  # Both halves must be set: `ALLOW_SHARED_LINKS` unset is read as *enabled* by
+  # api/server/routes/share.js, and omitting this block lets the schema default (all true)
+  # apply. Belt and braces on purpose.
+  sharedLinks:
+    create: false
+    share: false
+    public: false
+    snapshotFiles: false
+  # A second, parallel conversation mode we never designed for and never explain. It is
+  # default-true upstream and reaches the header authenticated users actually see.
+  temporaryChat: false
+  # No MCP servers are configured, but the builder panel is reachable without this — an empty
+  # admin surface in a single-purpose consumer app.
+  mcpServers:
+    use: false
+    create: false
+    share: false
+    public: false
+  # Nothing is pinned to the prompt bar, because there is nothing to pin.
+  defaultPinnedTools: []
 
 fileConfig:
   endpoints:
@@ -73,7 +110,20 @@ endpoints:
       models:
         default: ['simple-search', 'standard-search', 'deep-search']
         fetch: false
-      titleConvo: false
+      # Titles are generated, but NOT here. `titleEndpoint` sends the naming call to
+      # the small model below instead of back through this endpoint, because every
+      # model on this one is a retrieval budget: routing the request here would run
+      # the whole agentic pipeline — gather, hydrate, select, zoom, ~45s and real
+      # credits — to produce five words, and would bill the user for it.
+      titleConvo: true
+      titleEndpoint: 'aflat-title'
+      titleModel: '${TITLE_MODEL}'
+      titleMethod: 'completion'
+      titlePrompt: |
+        Scrie un titlu scurt pentru conversația de mai jos, în română, din perspectiva
+        întrebării utilizatorului. Maximum 6 cuvinte. Fără ghilimele, fără punct final,
+        fără cuvinte ca „întrebare" sau „conversație". Nu răspunde la întrebare —
+        doar numește subiectul ei.
       modelDisplayLabel: 'ai-aflat'
       # The orchestrator narrates its retrieval stages on `reasoning_content`, which is
       # what makes the thinking panel render distinct stage headers instead of one blob.
@@ -85,6 +135,22 @@ endpoints:
       customParams:
         reasoningKey: 'reasoning_content'
         reasoningFormat: 'disabled'
+
+    # Naming conversations only. It is never offered to the user: `modelSpecs.prioritize`
+    # is true, so the picker shows the three search modes and nothing else, and this
+    # endpoint appears in no spec. It exists so that titling — which is a language task,
+    # not a legal one — never touches the corpus or the credit ledger.
+    #
+    # Same provider and model the orchestrator already uses for synthesis, so this adds
+    # a key to the app's environment rather than a new dependency.
+    - name: 'aflat-title'
+      apiKey: '${TITLE_API_KEY}'
+      baseURL: '${TITLE_BASE_URL}'
+      models:
+        default: ['${TITLE_MODEL}']
+        fetch: false
+      titleConvo: false
+      modelDisplayLabel: 'ai-aflat'
 
 # The three search modes, one per effort level the engine actually takes (low | medium | high).
 # Two ids used to be exposed, which left `medium` — the intended default and the middle rung of
