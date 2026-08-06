@@ -86,6 +86,26 @@ export default defineConfig(({ command }) => ({
       },
     },
     VitePWA({
+      /**
+       * The service worker is RETIRED, and this emits one whose only job is to
+       * unregister itself and drop its caches on every client that still has it.
+       *
+       * Measured in production 2026-08-06, mobile Safari: every page load ran
+       * sw.js -> sw-heal.js -> a full reload of /c/new, and the reload landed in
+       * the middle of the Clerk session exchange. nginx logged
+       * `POST /api/aflat/auth/clerk 499` — client closed the request — five times
+       * in a row. The server created the user each time; the response carrying
+       * the session cookie never reached the browser, so the app came back
+       * anonymous and the whole thing looped. Sign-in was impossible on that
+       * device.
+       *
+       * The offline story bought us nothing here — this app is useless without
+       * the network, since every answer comes from retrieval — and it cost us
+       * authentication plus a stale UI on every deploy. Do not re-enable it
+       * without a way to keep an in-flight auth exchange alive across a
+       * worker-triggered reload.
+       */
+      selfDestroying: true,
       injectRegister: 'auto', // 'auto' | 'manual' | 'disabled'
       registerType: 'autoUpdate', // 'prompt' | 'autoUpdate'
       devOptions: {
