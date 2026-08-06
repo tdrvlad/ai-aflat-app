@@ -286,6 +286,18 @@ function FreshWidget() {
        * the feature rather than merely looking worse.
        */
       oauthFlow="popup"
+      /**
+       * Where Clerk lands the user if it ever completes by REDIRECT instead of
+       * the popup — which is not hypothetical: mobile browsers block popups, and
+       * Clerk then falls back to a full-page trip through the provider and its
+       * own account portal (`accounts.ai-aflat.ro`, measured on mobile
+       * 2026-08-06). Without these the return leg is the portal's configured
+       * landing page, i.e. off our app entirely; with them the user comes back
+       * to the chat route, where the parked question is picked up from
+       * localStorage exactly as it is after the popup flow.
+       */
+      signInFallbackRedirectUrl="/c/new"
+      signUpFallbackRedirectUrl="/c/new"
       appearance={{
         elements: {
           /* Clerk's own card chrome would sit inside ours; ours is the one that stays. */
