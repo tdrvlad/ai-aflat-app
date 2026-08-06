@@ -18,7 +18,6 @@ const {
 } = require('librechat-data-provider');
 const { updateUserPluginAuth, deleteUserPluginAuth } = require('~/server/services/PluginService');
 const { verifyOTPOrBackupCode } = require('~/server/services/twoFactorService');
-const { verifyEmail, resendVerificationEmail } = require('~/server/services/AuthService');
 const { getMCPManager, getFlowStateManager, getMCPServersRegistry } = require('~/config');
 const { invalidateCachedTools } = require('~/server/services/Config/getCachedTools');
 const { processDeleteRequest } = require('~/server/services/Files/process');
@@ -384,34 +383,6 @@ const deleteUserController = async (req, res) => {
   }
 };
 
-const verifyEmailController = async (req, res) => {
-  try {
-    const verifyEmailService = await verifyEmail(req);
-    if (verifyEmailService instanceof Error) {
-      return res.status(400).json({ message: verifyEmailService.message });
-    } else {
-      return res.status(200).json(verifyEmailService);
-    }
-  } catch (e) {
-    logger.error('[verifyEmailController]', e);
-    return res.status(500).json({ message: 'Something went wrong.' });
-  }
-};
-
-const resendVerificationController = async (req, res) => {
-  try {
-    const result = await resendVerificationEmail(req);
-    if (result instanceof Error) {
-      return res.status(400).json({ message: result.message });
-    } else {
-      return res.status(result.status ?? 200).json({ message: result.message });
-    }
-  } catch (e) {
-    logger.error('[verifyEmailController]', e);
-    return res.status(500).json({ message: 'Something went wrong.' });
-  }
-};
-
 /** Best-effort cleanup of stored MCP OAuth tokens and flow state. */
 const clearStoredMCPOAuthState = async (userId, serverName) => {
   try {
@@ -594,9 +565,7 @@ module.exports = {
   getTermsStatusController,
   acceptTermsController,
   deleteUserController,
-  verifyEmailController,
   updateUserPluginsController,
-  resendVerificationController,
   deleteUserMcpServers,
   maybeUninstallOAuthMCP,
 };

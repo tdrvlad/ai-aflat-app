@@ -1,18 +1,9 @@
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
-import {
-  Login,
-  VerifyEmail,
-  Registration,
-  ResetPassword,
-  ApiErrorWatcher,
-  TwoFactorScreen,
-  RequestPasswordReset,
-} from '~/components/Auth';
+import { Login, ApiErrorWatcher } from '~/components/Auth';
 import { OAuthSuccess, OAuthError } from '~/components/OAuth';
 import { AuthContextProvider } from '~/hooks/AuthContext';
 import WithRum from '~/lib/rum/WithRum';
 import RouteErrorBoundary from './RouteErrorBoundary';
-import StartupLayout from './Layouts/Startup';
 import LoginLayout from './Layouts/Login';
 import dashboardRoutes from './Dashboard';
 import ShareRoute from './ShareRoute';
@@ -100,30 +91,6 @@ export const router = createBrowserRouter(
       ],
     },
     {
-      path: '/',
-      element: <StartupLayout />,
-      errorElement: <RouteErrorBoundary />,
-      children: [
-        {
-          path: 'register',
-          element: <Registration />,
-        },
-        {
-          path: 'forgot-password',
-          element: <RequestPasswordReset />,
-        },
-        {
-          path: 'reset-password',
-          element: <ResetPassword />,
-        },
-      ],
-    },
-    {
-      path: 'verify',
-      element: <VerifyEmail />,
-      errorElement: <RouteErrorBoundary />,
-    },
-    {
       element: <AuthLayout />,
       errorElement: <RouteErrorBoundary />,
       children: [
@@ -134,10 +101,6 @@ export const router = createBrowserRouter(
             {
               path: 'login',
               element: <Login />,
-            },
-            {
-              path: 'login/2fa',
-              element: <TwoFactorScreen />,
             },
           ],
         },

@@ -43,7 +43,7 @@ export {
   sharedFileDownload,
   buildLoginRedirectUrl,
 } from './api-endpoints';
-export { default as request } from './request';
+export { default as request, setAnonAuthSurface } from './request';
 export { dataService };
 import * as dataService from './data-service';
 /* general helpers */

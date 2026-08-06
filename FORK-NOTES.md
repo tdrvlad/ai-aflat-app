@@ -1212,3 +1212,59 @@ depends on, and the `sources_by_act` grouping. Measured against the live orchest
     `ALLOW_EMAIL_LOGIN=false`. Removing the password/registration/reset/2FA machinery is the
     remaining half of the decision and is deliberately a separate change, so the embedded path can
     be proven in the browser before the fallback is destroyed.
+
+- **Local auth deleted (2026-08-06, W2, uncommitted):** the "remaining half" flagged in the entry
+  above. LibreChat's password machinery is now structurally gone, not disabled — no env var brings
+  it back. Design: `docs/superpowers/specs/2026-08-04-clerk-embedded-auth-design.md` §3.
+  - **Client:** `Registration`, `RequestPasswordReset`, `ResetPassword`, `VerifyEmail`,
+    `TwoFactorScreen`, `LoginForm` and the 2FA settings items (`TwoFactorAuthentication`,
+    `BackupCodesItem`, `DisableTwoFactorToggle`, `TwoFactorPhases/*`) deleted, with their routes
+    (`/register`, `/forgot-password`, `/reset-password`, `/verify`, `/login/2fa`), the
+    `useLoginUserMutation`/2FA/verify-email hooks, and 62 orphaned `com_auth_*` locale keys
+    (en + ro). `/login` now renders the embedded Clerk widget, or the OpenID redirect button when
+    `CLERK_PUBLISHABLE_KEY` is unset — `SocialLoginRender` is openid-only, since the other
+    provider strategies were already deleted server-side.
+  - **API:** `/api/auth` keeps only `/logout`, `/refresh`, `/cloudfront/refresh`, `/graph-token`.
+    Deleted: `/login`, `/register`, `/requestPasswordReset`, `/resetPassword`, all six `/2fa/*`
+    endpoints, `/api/user/verify` + `/verify/resend`, the `TwoFactorController`s and the
+    registration/reset/2FA/invite middleware. The admin panel's `POST /api/admin/login/local`
+    break-glass stays, gated by `requireAdminAccess` — it is why `localStrategy`,
+    `LoginController` and `twoFactorService` still exist.
+  - **Deliberately NOT deleted:** the OIDC redirect flow (design §3: the fallback door);
+    `AuthService`'s now-unreachable `registerUser`/reset/verify functions (no route calls them;
+    removing them means gutting a 900-line service and its spec — a separate cleanup);
+    the `packages/data-provider` request wrappers (shared package, admin door may use `login()`);
+    the user schema's `totpSecret`/`backupCodes` fields and `deleteUserController`'s 2FA-on-delete
+    check (data-integrity guard for any legacy 2FA user).
+  - **Registration is open to the public (owner decision 2026-08-06):** the domain-allowlist
+    block is gone from both yaml files, and `registration.socialLogins` is pinned to `['openid']`
+    so `/api/config` stops advertising upstream's default facebook/google/github list.
+  - **`clerkAuth.js` finally has its route-level success-path test** (`clerkAuth.test.js`):
+    real `createUser`/`findOpenIDUser`/`setAuthTokens` against mongodb-memory-server — first
+    sign-in creates `provider: 'openid'` + Clerk `sub` (§5.5), second finds the same user (§5.6),
+    refresh cookie set, 401 creates nothing, local-provider takeover refused (§5.8).
+
+- **`usage_events` telemetry MVP (2026-08-06, uncommitted):** one Mongo row per completed
+  ai-aflat request, written from the orchestrator's terminal envelope. Spec:
+  `docs/superpowers/specs/2026-08-06-telemetry-and-analytics-spec.md` §1 (rule 2: write from the
+  envelope, never re-derive) and §5 (24-month TTL).
+  - **Transport widened deliberately** (`packages/api/src/aflat/sources.ts`): the allowlist now
+    passes `job_id`, `query_id`, `outcome` and the `usage` block
+    (`effort`/`model`/`engine_cost_usd`/`engine_cost_is_complete`/`latency_ms`/`created_at`)
+    verbatim — validated primitives only, wrong-typed values become null, and a failed job's
+    null cost is never coerced to 0. New entry point `getAflatCompletion` returns
+    `{ part, payload }`; `getAflatSourcesPart` remains as the citation-only view.
+  - **Collection** (`packages/data-schemas/src/schema/usageEvent.ts`, collection `usage_events`):
+    `userId` (indexed) / `conversationId` (String — this fork's ids are UUIDs, not the spec's
+    ObjectId) / `messageId` / `jobId` / `queryId` / `effort` / `model` / `outcome` (verbatim,
+    never flattened — collapsing "found nothing" into "broke" would bill for a failure) /
+    `engineCostUsd` + `engineCostIsComplete` (deliberate divergence from the spec's
+    `engineCostMicroRon`: the envelope carries USD and an FX conversion at write time would be a
+    second source of truth) / `latencyMs` / `hits` / `candidates` / `creditsCharged` +
+    `priceListVersion` (null until credits phase 2). TTL index on `createdAt`, 730 days.
+  - **The write** (`api/server/services/aflat/usage.js`, called fire-and-forget from
+    `controllers/agents/client.js` after the sources fetch): a failed telemetry write is logged
+    and swallowed, never failing or delaying the user's answer; non-aflat endpoints and
+    missing envelopes skip with a debug log.
+  - **Out of scope by owner ruling:** `act_retrievals`, `answer_feedback`, `user_profiles`,
+    erasure cascade — after the cutover.

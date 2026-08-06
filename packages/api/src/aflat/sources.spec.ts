@@ -5,11 +5,13 @@ import type { Server, IncomingMessage, ServerResponse } from 'node:http';
 import type { TAflatSource, TAflatSourceAct } from 'librechat-data-provider';
 import type { AppConfig } from '@librechat/data-schemas';
 import { resolveHeaders } from '~/utils/env';
+import type { TAflatUsage } from './sources';
 import {
   AFLAT_ENDPOINT_NAME,
   buildSourcesUrl,
   fetchAflatSources,
   buildAflatSourcesPart,
+  getAflatCompletion,
   getAflatSourcesPart,
 } from './sources';
 
@@ -114,6 +116,16 @@ const measuredAct: TAflatSourceAct = {
   provisions: [measuredSource],
 };
 
+/** The `usage` block exactly as the orchestrator's job store emits it (jobs.js `sources()`). */
+const measuredUsage: TAflatUsage = {
+  effort: 'medium',
+  model: 'standard-search',
+  engine_cost_usd: 0.0125,
+  engine_cost_is_complete: true,
+  latency_ms: 6421,
+  created_at: '2026-08-06 12:34:56',
+};
+
 const appConfigFor = (baseURL: string, apiKey = 'test-key'): AppConfig =>
   ({
     endpoints: {
@@ -171,7 +183,7 @@ describe('fetchAflatSources', () => {
       responseMessageId: 'msg-1',
     });
 
-    expect(payload).toEqual({ sources: [realSource] });
+    expect(payload).toEqual({ sources: [realSource], job_id: 'job-1', query_id: 'q-1' });
     expect(payload.sources[0].url).toBe(realSource.url);
   });
 
@@ -198,7 +210,7 @@ describe('fetchAflatSources', () => {
         apiKey: 'test-key',
         responseMessageId: 'msg-2',
       }),
-    ).resolves.toEqual({ sources: [] });
+    ).resolves.toEqual({ sources: [], job_id: 'job-2' });
   });
 
   it('returns an empty list on 404 (no job for this message)', async () => {
@@ -356,7 +368,103 @@ describe('fetchAflatSources', () => {
         apiKey: 'test-key',
         responseMessageId: 'msg-7',
       }),
-    ).resolves.toEqual({ sources: [] });
+    ).resolves.toEqual({ sources: [], job_id: 'job-3' });
+  });
+});
+
+describe('the telemetry envelope (usage_events spec §1)', () => {
+  it('carries job_id, query_id, outcome and the usage block verbatim', async () => {
+    orchestrator.json({
+      job_id: 'job-t1',
+      query_id: 'q-t1',
+      outcome: 'answered',
+      sources: [measuredSource],
+      usage: measuredUsage,
+    });
+
+    const payload = await fetchAflatSources({
+      baseURL: orchestrator.baseURL,
+      apiKey: 'test-key',
+      responseMessageId: 'msg-t1',
+    });
+
+    expect(payload.job_id).toBe('job-t1');
+    expect(payload.query_id).toBe('q-t1');
+    expect(payload.outcome).toBe('answered');
+    expect(payload.usage).toEqual(measuredUsage);
+  });
+
+  it("keeps a failed job's null cost null — never 0", async () => {
+    orchestrator.json({
+      job_id: 'job-t2',
+      query_id: null,
+      outcome: 'failed',
+      sources: [],
+      usage: {
+        effort: null,
+        model: 'standard-search',
+        engine_cost_usd: null,
+        engine_cost_is_complete: null,
+        latency_ms: null,
+        created_at: '2026-08-06 12:00:00',
+      },
+    });
+
+    const payload = await fetchAflatSources({
+      baseURL: orchestrator.baseURL,
+      apiKey: 'test-key',
+      responseMessageId: 'msg-t2',
+    });
+
+    expect(payload.outcome).toBe('failed');
+    expect(payload.usage?.engine_cost_usd).toBeNull();
+    expect(payload.usage?.engine_cost_is_complete).toBeNull();
+    expect(payload.usage?.effort).toBeNull();
+    expect(payload.usage?.model).toBe('standard-search');
+  });
+
+  it('nulls a wrong-typed usage value instead of repairing it, and drops unknown keys', async () => {
+    orchestrator.json({
+      job_id: 'job-t3',
+      outcome: 'answered',
+      sources: [],
+      usage: {
+        effort: 5,
+        model: 'standard-search',
+        engine_cost_usd: '0.0125',
+        engine_cost_is_complete: 'yes',
+        latency_ms: 6421,
+        created_at: '2026-08-06 12:34:56',
+        injected: '<script>',
+      },
+    });
+
+    const payload = await fetchAflatSources({
+      baseURL: orchestrator.baseURL,
+      apiKey: 'test-key',
+      responseMessageId: 'msg-t3',
+    });
+
+    expect(payload.usage).toEqual({
+      effort: null,
+      model: 'standard-search',
+      engine_cost_usd: null,
+      engine_cost_is_complete: null,
+      latency_ms: 6421,
+      created_at: '2026-08-06 12:34:56',
+    });
+  });
+
+  it('drops a non-string outcome and a non-object usage block', async () => {
+    orchestrator.json({ job_id: 'job-t4', outcome: 7, usage: 'nope', sources: [] });
+
+    const payload = await fetchAflatSources({
+      baseURL: orchestrator.baseURL,
+      apiKey: 'test-key',
+      responseMessageId: 'msg-t4',
+    });
+
+    expect(payload).toEqual({ sources: [], job_id: 'job-t4' });
   });
 });
 
@@ -476,5 +584,64 @@ describe('getAflatSourcesPart', () => {
         responseMessageId: 'msg-14',
       }),
     ).resolves.toBeNull();
+  });
+});
+
+describe('getAflatCompletion', () => {
+  it('hands back both the content part and the envelope for the usage writer', async () => {
+    orchestrator.json({
+      job_id: 'job-c1',
+      query_id: 'q-c1',
+      outcome: 'answered',
+      sources: [realSource],
+      usage: measuredUsage,
+    });
+
+    const { part, payload } = await getAflatCompletion({
+      appConfig: appConfigFor(orchestrator.baseURL),
+      endpoint: AFLAT_ENDPOINT_NAME,
+      responseMessageId: 'msg-c1',
+    });
+
+    expect(part).toEqual({ type: ContentTypes.SOURCES, sources: [realSource] });
+    expect(payload).toEqual({
+      sources: [realSource],
+      job_id: 'job-c1',
+      query_id: 'q-c1',
+      outcome: 'answered',
+      usage: measuredUsage,
+    });
+  });
+
+  it('still yields the envelope when retrieval was empty — empty is an outcome, not an absence', async () => {
+    orchestrator.json({
+      job_id: 'job-c2',
+      outcome: 'failed',
+      sources: [],
+      usage: { ...measuredUsage, engine_cost_usd: null, engine_cost_is_complete: null },
+    });
+
+    const { part, payload } = await getAflatCompletion({
+      appConfig: appConfigFor(orchestrator.baseURL),
+      endpoint: AFLAT_ENDPOINT_NAME,
+      responseMessageId: 'msg-c2',
+    });
+
+    expect(part).toBeNull();
+    expect(payload?.outcome).toBe('failed');
+    expect(payload?.usage?.engine_cost_usd).toBeNull();
+  });
+
+  it('yields a null payload for a different endpoint, so the writer skips', async () => {
+    orchestrator.json({ sources: [realSource], usage: measuredUsage });
+
+    await expect(
+      getAflatCompletion({
+        appConfig: appConfigFor(orchestrator.baseURL),
+        endpoint: 'some-other-endpoint',
+        responseMessageId: 'msg-c3',
+      }),
+    ).resolves.toEqual({ part: null, payload: null });
+    expect(orchestrator.requests).toHaveLength(0);
   });
 });

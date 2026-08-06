@@ -3,6 +3,7 @@ import { isAgentsEndpoint, resolveEndpointType } from 'librechat-data-provider';
 import type { EModelEndpoint } from 'librechat-data-provider';
 import { useGetEndpointsQuery, useGetAgentByIdQuery } from '~/data-provider';
 import { useAgentsMapContext } from './AgentsMapContext';
+import { useAuthContext } from '~/hooks/AuthContext';
 import { useChatContext } from './ChatContext';
 
 interface DragDropContextValue {
@@ -17,7 +18,13 @@ const DragDropContext = createContext<DragDropContextValue | undefined>(undefine
 
 export function DragDropProvider({ children }: { children: React.ReactNode }) {
   const { conversation } = useChatContext();
-  const { data: endpointsConfig } = useGetEndpointsQuery();
+  const { isAuthenticated } = useAuthContext();
+  /**
+   * Gated like ChatRoute's own copy: on the anonymous surface this query can
+   * only 401, and the repeated 401s were feeding the auth-recovery redirect
+   * that reloaded the page mid-sign-in (2026-08-06).
+   */
+  const { data: endpointsConfig } = useGetEndpointsQuery({ enabled: isAuthenticated });
   const agentsMap = useAgentsMapContext();
 
   const needsAgentFetch = useMemo(() => {

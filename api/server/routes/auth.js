@@ -1,31 +1,8 @@
 const express = require('express');
-const { createSetBalanceConfig, forceRefreshCloudFrontAuthCookies } = require('@librechat/api');
-const {
-  resetPasswordRequestController,
-  resetPasswordController,
-  registrationController,
-  graphTokenController,
-  refreshController,
-} = require('~/server/controllers/AuthController');
-const {
-  regenerateBackupCodes,
-  disable2FA,
-  confirm2FA,
-  enable2FA,
-  verify2FA,
-} = require('~/server/controllers/TwoFactorController');
-const { verify2FAWithTempToken } = require('~/server/controllers/auth/TwoFactorAuthController');
+const { forceRefreshCloudFrontAuthCookies } = require('@librechat/api');
+const { graphTokenController, refreshController } = require('~/server/controllers/AuthController');
 const { logoutController } = require('~/server/controllers/auth/LogoutController');
-const { loginController } = require('~/server/controllers/auth/LoginController');
-const { findBalanceByUser, upsertBalanceFields } = require('~/models');
-const { getAppConfig } = require('~/server/services/Config');
 const middleware = require('~/server/middleware');
-
-const setBalanceConfig = createSetBalanceConfig({
-  getAppConfig,
-  findBalanceByUser,
-  upsertBalanceFields,
-});
 
 const router = express.Router();
 const getCloudFrontAuthCookieRefreshResult = (req, res) => {
@@ -37,18 +14,19 @@ const getCloudFrontAuthCookieRefreshResult = (req, res) => {
   return forceRefreshCloudFrontAuthCookies(req, res, req.user);
 };
 
-const ldapAuth = !!process.env.LDAP_URL && !!process.env.LDAP_USER_SEARCH_BASE;
-//Local
+/**
+ * ai-aflat: LibreChat's local auth is gone (design 2026-08-04 §3) — no
+ * `/login`, `/register`, `/requestPasswordReset`, `/resetPassword` and no 2FA
+ * endpoints. Clerk is the identity provider: the browser exchanges a Clerk JWT
+ * at `POST /api/aflat/auth/clerk`, or falls back to the OIDC redirect at
+ * `/oauth/openid`. Both end in `setAuthTokens`, so `/logout` and `/refresh`
+ * below still serve every session.
+ *
+ * The admin panel keeps its own local door at `POST /api/admin/auth/login/local`
+ * as a break-glass; it is gated by `requireAdminAccess` and is deliberately not
+ * part of the product's sign-in path.
+ */
 router.post('/logout', middleware.requireJwtAuth, logoutController);
-router.post(
-  '/login',
-  middleware.logHeaders,
-  middleware.loginLimiter,
-  middleware.checkBan,
-  ldapAuth ? middleware.requireLdapAuth : middleware.requireLocalAuth,
-  setBalanceConfig,
-  loginController,
-);
 router.post('/refresh', refreshController);
 router.post('/cloudfront/refresh', middleware.requireJwtAuth, (req, res) => {
   const result = getCloudFrontAuthCookieRefreshResult(req, res);
@@ -63,41 +41,6 @@ router.post('/cloudfront/refresh', middleware.requireJwtAuth, (req, res) => {
     refreshAfterSec: result.refreshAfterSec,
   });
 });
-router.post(
-  '/register',
-  middleware.registerLimiter,
-  middleware.checkBan,
-  middleware.checkInviteUser,
-  middleware.validateRegistration,
-  registrationController,
-);
-router.post(
-  '/requestPasswordReset',
-  middleware.resetPasswordLimiter,
-  middleware.checkBan,
-  middleware.validatePasswordReset,
-  resetPasswordRequestController,
-);
-router.post(
-  '/resetPassword',
-  middleware.checkBan,
-  middleware.validatePasswordReset,
-  resetPasswordController,
-);
-
-router.post('/2fa/enable', middleware.requireJwtAuth, enable2FA);
-router.post('/2fa/verify', middleware.requireJwtAuth, verify2FA);
-router.post(
-  '/2fa/verify-temp',
-  middleware.setTwoFactorTempUser,
-  middleware.twoFactorTempLimiter,
-  middleware.checkBan,
-  verify2FAWithTempToken,
-);
-router.post('/2fa/confirm', middleware.requireJwtAuth, confirm2FA);
-router.post('/2fa/disable', middleware.requireJwtAuth, disable2FA);
-router.post('/2fa/backup/regenerate', middleware.requireJwtAuth, regenerateBackupCodes);
-
 router.get('/graph-token', middleware.requireJwtAuth, graphTokenController);
 
 module.exports = router;

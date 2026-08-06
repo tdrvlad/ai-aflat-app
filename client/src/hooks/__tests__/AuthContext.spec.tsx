@@ -26,11 +26,6 @@ jest.mock('librechat-data-provider', () => ({
   apiBaseUrl: () => mockApiBaseUrl(),
 }));
 
-let mockCapturedLoginOptions: {
-  onSuccess: (...args: unknown[]) => void;
-  onError: (...args: unknown[]) => void;
-};
-
 let mockCapturedLogoutOptions: {
   onSuccess: (...args: unknown[]) => void;
   onError: (...args: unknown[]) => void;
@@ -39,15 +34,6 @@ let mockCapturedLogoutOptions: {
 const mockRefreshMutate = jest.fn();
 
 jest.mock('~/data-provider', () => ({
-  useLoginUserMutation: jest.fn(
-    (options: {
-      onSuccess: (...args: unknown[]) => void;
-      onError: (...args: unknown[]) => void;
-    }) => {
-      mockCapturedLoginOptions = options;
-      return { mutate: jest.fn() };
-    },
-  ),
   useLogoutUserMutation: jest.fn(
     (options: {
       onSuccess: (...args: unknown[]) => void;
@@ -116,80 +102,6 @@ function renderProviderLive() {
     </QueryClientProvider>,
   );
 }
-
-describe('AuthContextProvider — login onError redirect handling', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    window.history.replaceState({}, '', '/login');
-  });
-
-  afterEach(() => {
-    window.history.replaceState({}, '', '/');
-  });
-
-  it('preserves a valid redirect_to param across login failure', () => {
-    window.history.replaceState({}, '', '/login?redirect_to=%2Fc%2Fabc123');
-
-    renderProvider();
-
-    act(() => {
-      mockCapturedLoginOptions.onError({ message: 'Invalid credentials' });
-    });
-
-    expect(mockNavigate).toHaveBeenCalledWith('/login?redirect_to=%2Fc%2Fabc123', {
-      replace: true,
-    });
-  });
-
-  it('drops redirect_to when it contains an absolute URL (open-redirect prevention)', () => {
-    window.history.replaceState({}, '', '/login?redirect_to=https%3A%2F%2Fevil.com');
-
-    renderProvider();
-
-    act(() => {
-      mockCapturedLoginOptions.onError({ message: 'Invalid credentials' });
-    });
-
-    expect(mockNavigate).toHaveBeenCalledWith('/login', { replace: true });
-  });
-
-  it('drops redirect_to when it points to /login (recursive redirect prevention)', () => {
-    window.history.replaceState({}, '', '/login?redirect_to=%2Flogin');
-
-    renderProvider();
-
-    act(() => {
-      mockCapturedLoginOptions.onError({ message: 'Invalid credentials' });
-    });
-
-    expect(mockNavigate).toHaveBeenCalledWith('/login', { replace: true });
-  });
-
-  it('navigates to plain /login when no redirect_to param exists', () => {
-    renderProvider();
-
-    act(() => {
-      mockCapturedLoginOptions.onError({ message: 'Server error' });
-    });
-
-    expect(mockNavigate).toHaveBeenCalledWith('/login', { replace: true });
-  });
-
-  it('preserves redirect_to with query params and hash', () => {
-    const target = '/c/abc123?model=gpt-4#section';
-    window.history.replaceState({}, '', `/login?redirect_to=${encodeURIComponent(target)}`);
-
-    renderProvider();
-
-    act(() => {
-      mockCapturedLoginOptions.onError({ message: 'Invalid credentials' });
-    });
-
-    const navigatedUrl = mockNavigate.mock.calls[0][0] as string;
-    const params = new URLSearchParams(navigatedUrl.split('?')[1]);
-    expect(decodeURIComponent(params.get('redirect_to')!)).toBe(target);
-  });
-});
 
 describe('AuthContextProvider — logout onSuccess/onError handling', () => {
   const mockSetTokenHeader = jest.requireMock('librechat-data-provider').setTokenHeader;

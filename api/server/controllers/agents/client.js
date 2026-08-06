@@ -19,7 +19,7 @@ const {
   memoryInstructions,
   createTokenCounter,
   applyContextToAgent,
-  getAflatSourcesPart,
+  getAflatCompletion,
   isMemoryAgentEnabled,
   recordCollectedUsage,
   sendEvent,
@@ -77,6 +77,7 @@ const {
   DEFAULT_MEMORY_MAX_INPUT_TOKENS,
 } = require('librechat-data-provider');
 const { filterFilesByAgentAccess } = require('~/server/services/Files/permissions');
+const { recordAflatUsageEvent } = require('~/server/services/aflat/usage');
 const { encodeAndFormat } = require('~/server/services/Files/images/encode');
 const { createContextHandlers } = require('~/app/clients/prompts');
 const { resolveConfigServers } = require('~/server/services/MCP');
@@ -1499,14 +1500,27 @@ class AgentClient extends BaseClient {
        * answer, and pushed onto `contentParts` (not emitted as a separate SSE
        * event) so it persists with the message like every other content part.
        */
-      const aflatSourcesPart = await getAflatSourcesPart({
+      const aflatCompletion = await getAflatCompletion({
         appConfig,
         endpoint: this.options.agent?.endpoint,
         responseMessageId: this.responseMessageId,
       });
-      if (aflatSourcesPart) {
-        this.contentParts.push(aflatSourcesPart);
+      if (aflatCompletion.part) {
+        this.contentParts.push(aflatCompletion.part);
       }
+
+      /**
+       * ai-aflat: one `usage_events` row per completed request, written from
+       * the same envelope (telemetry spec 2026-08-06 §1, rule 2). Deliberately
+       * not awaited — a failed telemetry write must never fail or delay the
+       * user's answer; the service logs and swallows its own errors.
+       */
+      recordAflatUsageEvent({
+        payload: aflatCompletion.payload,
+        userId: this.user ?? this.options.req.user?.id,
+        conversationId: this.conversationId,
+        messageId: this.responseMessageId,
+      });
     } catch (err) {
       if (abortController.signal.aborted) {
         logger.debug(

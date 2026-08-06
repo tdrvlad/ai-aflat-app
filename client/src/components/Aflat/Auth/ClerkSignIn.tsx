@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { roRO } from '@clerk/localizations';
-import { ClerkProvider, SignIn, useAuth } from '@clerk/clerk-react';
+import { ClerkProvider, SignIn, useAuth, useClerk } from '@clerk/clerk-react';
 import { apiBaseUrl, request } from 'librechat-data-provider';
 import { Spinner } from '@librechat/client';
 import { useAuthContext, useLocalize } from '~/hooks';
@@ -43,6 +43,58 @@ const FAILURE_KEYS: Record<string, TranslationKeys> = {
  * precisely the moment they are owed an answer. `onSignedIn` closes the modal
  * and the thread continues, same scroll, same conversation id.
  */
+/**
+ * The widget resumes whatever sign-in attempt the Clerk client already holds —
+ * and an abandoned attempt survives the page, the modal and even a cookie
+ * clear, because it lives on Clerk's client object server-side. A visitor who
+ * typed an email yesterday and closed the tab reopens this modal not at the
+ * identifier screen but at „factor one" for that half-finished attempt; for a
+ * password-less (Google-created) account that screen offers nothing but the
+ * Google button and reads as a dead end. Measured live 2026-08-06: the modal
+ * opened at `#/factor-one` for a stale attempt on a supposedly cold browser.
+ *
+ * So: if the client carries an in-progress attempt and no signed-in session,
+ * the client is destroyed — clerk-js mints a fresh one lazily — and only then
+ * is the widget mounted. Destroying is safe precisely because this modal only
+ * exists for anonymous visitors: there is no session to lose by definition,
+ * and the guard below refuses to run when one exists anyway.
+ */
+function useFreshSignInAttempt(): boolean {
+  const clerk = useClerk();
+  const { isSignedIn } = useAuth();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (ready) {
+      return;
+    }
+    if (!clerk.loaded) {
+      return;
+    }
+    const staleAttempt =
+      isSignedIn !== true &&
+      (clerk.client?.signIn?.status != null || clerk.client?.signUp?.status != null);
+    if (!staleAttempt) {
+      setReady(true);
+      return;
+    }
+    let cancelled = false;
+    void clerk.client
+      .destroy()
+      .catch(() => undefined) /* a failed reset still beats not mounting at all */
+      .finally(() => {
+        if (!cancelled) {
+          setReady(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, clerk, clerk.loaded, isSignedIn]);
+
+  return ready;
+}
+
 function ClerkHandoff({
   onSignedIn,
   onFailed,
@@ -184,65 +236,89 @@ export default function ClerkSignIn({
             </p>
           </div>
         )}
-        <SignIn
-          routing="virtual"
-          /**
-           * Sign-in *or up*, from the one form.
-           *
-           * `<SignIn>` on its own is exactly that — sign-in — so an email it has
-           * never seen is answered with „Couldn't find your account." and a dead
-           * end. That is the wrong half of the product: this modal is raised at
-           * the moment a stranger asks their first question, its own title says
-           * „Creează cont ca să primești răspunsul", and almost everyone who
-           * reaches it has no account yet. With this, an unknown address moves
-           * straight on to creating one instead of being told off for not
-           * already existing.
-           */
-          withSignUp={true}
-          /**
-           * Google and Facebook in a popup, not a full-page redirect.
-           *
-           * The default sends the whole tab to the provider, which tears down the
-           * conversation this modal is floating over — the question, the thread,
-           * the scroll position — and returns the user to a cold app boot. That
-           * is precisely the „resume the conversation you already started"
-           * promise the embedded widget exists to keep, so the redirect breaks
-           * the feature rather than merely looking worse.
-           */
-          oauthFlow="popup"
-          appearance={{
-            elements: {
-              /* Clerk's own card chrome would sit inside ours; ours is the one that stays. */
-              rootBox: 'w-full',
-              cardBox: 'w-full shadow-none border-none',
-              card: 'w-full shadow-none bg-transparent p-0',
-              /**
-               * The title goes, the subtitle stays.
-               *
-               * Clerk's title only ever repeats ours — two „Creează cont"
-               * headings, one above the other. Its subtitle is a different
-               * thing: it is the *per-step* instruction, and on the code step it
-               * is the only place that says a code was sent and to which
-               * address. Hiding the whole header left that step as six unlabelled
-               * boxes with nothing explaining what belongs in them.
-               */
-              headerTitle: 'hidden',
-              headerSubtitle: 'text-sm text-text-secondary',
-              footer: 'hidden',
-              formButtonPrimary: 'min-h-[44px] text-sm font-medium normal-case tracking-normal',
-              formFieldInput: 'min-h-[44px] text-sm',
-              socialButtonsBlockButton: 'min-h-[44px] text-sm',
-              /* Decoration on the one button that needs no help being found. */
-              buttonArrowIcon: 'hidden',
-            },
-            variables: {
-              colorPrimary: 'var(--panza-cta)',
-              borderRadius: '0.75rem',
-              fontSize: '0.875rem',
-            },
-          }}
-        />
+        <FreshWidget />
       </div>
     </ClerkProvider>
+  );
+}
+
+/**
+ * The widget itself, mounted only once `useFreshSignInAttempt` has said the
+ * client is clean — a stale attempt would otherwise open the modal mid-flow
+ * (see the hook's comment). The spinner stands in during the reset, which is
+ * one round trip at worst and usually nothing.
+ */
+function FreshWidget() {
+  const fresh = useFreshSignInAttempt();
+
+  if (!fresh) {
+    return (
+      <div className="flex min-h-[180px] items-center justify-center" role="status">
+        <Spinner size={28} />
+      </div>
+    );
+  }
+
+  return (
+    <SignIn
+      routing="virtual"
+      /**
+       * Sign-in *or up*, from the one form.
+       *
+       * `<SignIn>` on its own is exactly that — sign-in — so an email it has
+       * never seen is answered with „Couldn't find your account." and a dead
+       * end. That is the wrong half of the product: this modal is raised at
+       * the moment a stranger asks their first question, its own title says
+       * „Creează cont ca să primești răspunsul", and almost everyone who
+       * reaches it has no account yet. With this, an unknown address moves
+       * straight on to creating one instead of being told off for not
+       * already existing.
+       */
+      withSignUp={true}
+      /**
+       * Google and Facebook in a popup, not a full-page redirect.
+       *
+       * The default sends the whole tab to the provider, which tears down the
+       * conversation this modal is floating over — the question, the thread,
+       * the scroll position — and returns the user to a cold app boot. That
+       * is precisely the „resume the conversation you already started"
+       * promise the embedded widget exists to keep, so the redirect breaks
+       * the feature rather than merely looking worse.
+       */
+      oauthFlow="popup"
+      appearance={{
+        elements: {
+          /* Clerk's own card chrome would sit inside ours; ours is the one that stays. */
+          rootBox: 'w-full',
+          cardBox: 'w-full shadow-none border-none',
+          card: 'w-full shadow-none bg-transparent p-0',
+          /**
+           * The title goes, the subtitle stays.
+           *
+           * Clerk's title only ever repeats ours — two „Creează cont"
+           * headings, one above the other. Its subtitle is a different
+           * thing: it is the *per-step* instruction, and on the code step it
+           * is the only place that says a code was sent and to which
+           * address. Hiding the whole header left that step as six unlabelled
+           * boxes with nothing explaining what belongs in them.
+           */
+          headerTitle: 'hidden',
+          headerSubtitle: 'text-sm text-text-secondary',
+          footer: 'hidden',
+          formButtonPrimary: 'min-h-[44px] text-sm font-medium normal-case tracking-normal',
+          formFieldInput: 'min-h-[44px] text-sm',
+          socialButtonsBlockButton: 'min-h-[44px] text-sm',
+          /* Decoration on the one button that needs no help being found. */
+          buttonArrowIcon: 'hidden',
+        },
+        variables: {
+          colorPrimary: 'var(--panza-cta)',
+          /* `--radius` (style.css) is the app's own control radius; Clerk's 0.75rem
+             default read as a separate, rounder interface pasted into ours. */
+          borderRadius: '0.5rem',
+          fontSize: '0.875rem',
+        },
+      }}
+    />
   );
 }

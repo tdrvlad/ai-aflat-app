@@ -37,18 +37,6 @@ function AuthLayout({
           <ErrorMessage>{localize('com_auth_error_login_server')}</ErrorMessage>
         </div>
       );
-    } else if (error === 'com_auth_error_invalid_reset_token') {
-      return (
-        <div className="mx-auto sm:max-w-sm">
-          <ErrorMessage>
-            {localize('com_auth_error_invalid_reset_token')}{' '}
-            <a className="font-semibold text-link hover:underline" href="/forgot-password">
-              {localize('com_auth_click_here')}
-            </a>{' '}
-            {localize('com_auth_to_try_again')}
-          </ErrorMessage>
-        </div>
-      );
     } else if (error != null && error) {
       return (
         <div className="mx-auto sm:max-w-sm">
@@ -91,11 +79,9 @@ function AuthLayout({
            * email. Rendering these underneath it repeats those providers and adds
            * a redirect to Clerk's hosted page — a second door to the same room.
            */}
-          {!embeddedClerk &&
-            !pathname.includes('2fa') &&
-            (pathname.includes('login') || pathname.includes('register')) && (
-              <SocialLoginRender startupConfig={startupConfig} />
-            )}
+          {!embeddedClerk && pathname.includes('login') && (
+            <SocialLoginRender startupConfig={startupConfig} />
+          )}
         </div>
       </main>
       <Footer startupConfig={startupConfig} />

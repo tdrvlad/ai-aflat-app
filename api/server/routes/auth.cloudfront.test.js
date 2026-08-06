@@ -4,62 +4,22 @@ const request = require('supertest');
 const mockForceRefreshCloudFrontAuthCookies = jest.fn();
 
 jest.mock('@librechat/api', () => ({
-  createSetBalanceConfig: jest.fn(() => (req, res, next) => next()),
   forceRefreshCloudFrontAuthCookies: (...args) => mockForceRefreshCloudFrontAuthCookies(...args),
 }));
 
 jest.mock('~/server/controllers/AuthController', () => ({
   refreshController: jest.fn((req, res) => res.status(200).end()),
-  registrationController: jest.fn((req, res) => res.status(200).end()),
-  resetPasswordController: jest.fn((req, res) => res.status(200).end()),
-  resetPasswordRequestController: jest.fn((req, res) => res.status(200).end()),
   graphTokenController: jest.fn((req, res) => res.status(200).end()),
-}));
-
-jest.mock('~/server/controllers/TwoFactorController', () => ({
-  enable2FA: jest.fn((req, res) => res.status(200).end()),
-  verify2FA: jest.fn((req, res) => res.status(200).end()),
-  confirm2FA: jest.fn((req, res) => res.status(200).end()),
-  disable2FA: jest.fn((req, res) => res.status(200).end()),
-  regenerateBackupCodes: jest.fn((req, res) => res.status(200).end()),
-}));
-
-jest.mock('~/server/controllers/auth/TwoFactorAuthController', () => ({
-  verify2FAWithTempToken: jest.fn((req, res) => res.status(200).end()),
 }));
 
 jest.mock('~/server/controllers/auth/LogoutController', () => ({
   logoutController: jest.fn((req, res) => res.status(200).end()),
 }));
 
-jest.mock('~/server/controllers/auth/LoginController', () => ({
-  loginController: jest.fn((req, res) => res.status(200).end()),
-}));
-
-jest.mock('~/models', () => ({
-  findBalanceByUser: jest.fn(),
-  upsertBalanceFields: jest.fn(),
-}));
-
-jest.mock('~/server/services/Config', () => ({
-  getAppConfig: jest.fn(),
-}));
-
 jest.mock('~/server/middleware', () => {
   const pass = (req, res, next) => next();
   return {
-    logHeaders: pass,
-    loginLimiter: pass,
-    setTwoFactorTempUser: pass,
-    twoFactorTempLimiter: pass,
     checkBan: pass,
-    requireLocalAuth: pass,
-    requireLdapAuth: pass,
-    registerLimiter: pass,
-    checkInviteUser: pass,
-    validateRegistration: pass,
-    resetPasswordLimiter: pass,
-    validatePasswordReset: pass,
     requireJwtAuth: jest.fn((req, res, next) => {
       if (req.headers.authorization !== 'Bearer ok') {
         return res.status(401).json({ message: 'Unauthorized' });

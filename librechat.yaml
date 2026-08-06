@@ -4,30 +4,24 @@
 version: 1.3.13
 cache: true
 
-# ┌─ COLLECTION GATE (Task 10 deploy) ────────────────────────────────────────┐
-# │ Consent wording v2 is approved but not yet in the code, so production may  │
-# │ not take a question from the public under the v1 wording that IS in the     │
-# │ code (`CONSENT_WORDING_VERSION`/`ACK_VERSION` = 'v1-2026-07').              │
+# ┌─ REGISTRATION IS OPEN TO THE PUBLIC (owner decision, 2026-08-06) ──────────┐
+# │ There is deliberately NO `registration:` domain-allowlist block. The former │
+# │ sapio.ro collection gate was removed when the product opened to the public. │
 # │                                                                            │
-# │ This is the gate for the AUTHENTICATED path. `isEmailDomainAllowed` runs in │
-# │ `api/strategies/openidStrategy.js` BEFORE the user is even looked up, so an │
-# │ allowlist here blocks every Clerk sign-in whose email domain is not listed  │
-# │ — new accounts and existing ones alike. Nobody outside sapio.ro can reach   │
-# │ the composer, the v1 ConsentModal, or write a message document. The sign-in │
-# │ flow itself still runs all the way to Clerk and back, so the operator can   │
-# │ walk it end to end.                                                        │
+# │ `isEmailDomainAllowed` still runs on both sign-in paths — the Clerk bridge  │
+# │ (`api/server/routes/clerkAuth.js`) and `api/strategies/openidStrategy.js` — │
+# │ by design. With no allowlist configured it passes everyone; re-adding a     │
+# │ domain allowlist here re-closes BOTH doors at once.                         │
 # │                                                                            │
-# │ The ANONYMOUS path is gated separately by `AFLAT_ANON_QUESTION_MAX=0` in    │
-# │ the server's .env — see .claude/tasks/task10-deploy-runbook.md.            │
-# │                                                                            │
-# │ TO OPEN THE PRODUCT TO THE PUBLIC: apply the v2 wording, bump both version  │
-# │ constants, then delete this whole `registration:` block and set             │
-# │ AFLAT_ANON_QUESTION_MAX=5. Both are one-line changes; neither needs a       │
-# │ rebuild (this file is read at boot, that one at limiter construction).      │
+# │ The ANONYMOUS path is gated separately by `AFLAT_ANON_QUESTION_MAX` in the  │
+# │ server's .env — see .claude/tasks/task10-deploy-runbook.md.                │
 # └────────────────────────────────────────────────────────────────────────────┘
+
+# socialLogins pinned to openid (the Clerk OIDC fallback button). Without this
+# the server serves upstream's default list — google, facebook, github, discord,
+# saml — none of which have a strategy in this fork any more (deleted 2026-08-06).
 registration:
-  allowedDomains:
-    - 'sapio.ro'
+  socialLogins: ['openid']
 
 interface:
   customWelcome: 'Întreabă orice despre legislația din România. Răspunsurile vin cu sursa lângă ele.'
@@ -117,7 +111,7 @@ endpoints:
       # credits — to produce five words, and would bill the user for it.
       titleConvo: true
       titleEndpoint: 'aflat-title'
-      titleModel: '${TITLE_MODEL}'
+      titleModel: 'Qwen/Qwen3-Next-80B-A3B-Instruct'
       titleMethod: 'completion'
       titlePrompt: |
         Scrie un titlu scurt pentru conversația de mai jos, în română, din perspectiva
@@ -147,7 +141,7 @@ endpoints:
       apiKey: '${TITLE_API_KEY}'
       baseURL: '${TITLE_BASE_URL}'
       models:
-        default: ['${TITLE_MODEL}']
+        default: ['Qwen/Qwen3-Next-80B-A3B-Instruct']
         fetch: false
       titleConvo: false
       modelDisplayLabel: 'ai-aflat'

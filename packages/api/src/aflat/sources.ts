@@ -64,9 +64,43 @@ const ACT_NUMBER_FIELDS = ['act_id'] as const;
 const ACT_BOOLEAN_FIELDS = ['in_force', 'likely_amending', 'cited'] as const;
 const ACT_URL_FIELDS = ['url', 'viewer_url'] as const;
 
+/** Envelope identity keys carried for the `usage_events` writer, verbatim strings only. */
+const ENVELOPE_STRING_FIELDS = ['job_id', 'query_id', 'outcome'] as const;
+
+const USAGE_STRING_FIELDS = ['effort', 'model', 'created_at'] as const;
+const USAGE_NUMBER_FIELDS = ['engine_cost_usd', 'latency_ms'] as const;
+const USAGE_BOOLEAN_FIELDS = ['engine_cost_is_complete'] as const;
+
+/**
+ * The `usage` block of the orchestrator's terminal envelope (telemetry spec
+ * 2026-08-06 §1). Every key is always present; `null` means "not recorded".
+ * A failed job's null cost must NEVER be coerced to 0 by any reader, and
+ * `engine_cost_is_complete` travels with the cost because one is useless
+ * without the other.
+ */
+export interface TAflatUsage {
+  effort: string | null;
+  model: string | null;
+  engine_cost_usd: number | null;
+  engine_cost_is_complete: boolean | null;
+  latency_ms: number | null;
+  created_at: string | null;
+}
+
 export interface AflatSourcesPayload {
   sources: TAflatSource[];
   sources_by_act?: TAflatSourceAct[];
+  /** Orchestrator job id — the join key to its SQLite log. Absent when no job answered. */
+  job_id?: string;
+  /** LegDB's audit key for the query behind this job. */
+  query_id?: string;
+  /**
+   * The orchestrator's terminal outcome, verbatim ('answered'/'failed'/…).
+   * Never flattened here or downstream: collapsing "found nothing" into
+   * "broke" would let a failure be billed as an answer.
+   */
+  outcome?: string;
+  usage?: TAflatUsage;
 }
 
 export interface AflatSourcesLookup {
@@ -202,6 +236,31 @@ function normalizeSourceAct(raw: unknown): TAflatSourceAct | null {
   };
 }
 
+/**
+ * The `usage` block crosses the same allowlist boundary as everything else:
+ * validated primitives verbatim, a wrong-typed value becomes `null` rather
+ * than being repaired, and in particular a null cost stays null — never 0.
+ */
+function normalizeUsage(raw: unknown): TAflatUsage | null {
+  const candidate = asRecord(raw);
+  if (candidate == null) {
+    return null;
+  }
+
+  const strings = pickStrings(candidate, USAGE_STRING_FIELDS);
+  const numbers = pickNumbers(candidate, USAGE_NUMBER_FIELDS);
+  const booleans = pickBooleans(candidate, USAGE_BOOLEAN_FIELDS);
+
+  return {
+    effort: strings.effort ?? null,
+    model: strings.model ?? null,
+    engine_cost_usd: numbers.engine_cost_usd ?? null,
+    engine_cost_is_complete: booleans.engine_cost_is_complete ?? null,
+    latency_ms: numbers.latency_ms ?? null,
+    created_at: strings.created_at ?? null,
+  };
+}
+
 function normalizeSources(payload: unknown): AflatSourcesPayload {
   const record = asRecord(payload);
   if (record == null) {
@@ -228,7 +287,26 @@ function normalizeSources(payload: unknown): AflatSourcesPayload {
     }
   }
 
-  return acts.length > 0 ? { sources, sources_by_act: acts } : { sources };
+  const normalized: AflatSourcesPayload =
+    acts.length > 0 ? { sources, sources_by_act: acts } : { sources };
+
+  const envelope = pickStrings(record, ENVELOPE_STRING_FIELDS);
+  if (envelope.job_id != null) {
+    normalized.job_id = envelope.job_id;
+  }
+  if (envelope.query_id != null) {
+    normalized.query_id = envelope.query_id;
+  }
+  if (envelope.outcome != null) {
+    normalized.outcome = envelope.outcome;
+  }
+
+  const usage = normalizeUsage(record.usage);
+  if (usage != null) {
+    normalized.usage = usage;
+  }
+
+  return normalized;
 }
 
 /** `GET {baseURL}/messages/{responseMessageId}/sources` — see FORK-NOTES for the contract. */
@@ -284,37 +362,58 @@ export function buildAflatSourcesPart(payload: AflatSourcesPayload): SourcesCont
   return part;
 }
 
+export interface AflatCompletionEnvelope {
+  /** The renderable SOURCES content part, or null when there is nothing to render. */
+  part: SourcesContentPart | null;
+  /**
+   * The normalized envelope the orchestrator returned, handed to the
+   * `usage_events` writer. `null` when the endpoint is not ai-aflat or is
+   * misconfigured — the writer must then skip, not synthesize a row.
+   */
+  payload: AflatSourcesPayload | null;
+}
+
 /**
  * The one entry point `/api` calls: resolve the ai-aflat endpoint's own baseURL and
- * key from the app config, fetch the citations for this response, and hand back a
- * content part ready to push onto the message. Returns `null` for every endpoint
- * that is not ai-aflat, for a misconfigured endpoint, and for an empty result.
+ * key from the app config, fetch the record the orchestrator persisted for this
+ * response, and hand back both the renderable content part and the raw payload
+ * (identity + usage) for the telemetry writer. `payload` is `null` for every
+ * endpoint that is not ai-aflat and for a misconfigured endpoint; an empty
+ * retrieval still yields a payload — empty is an outcome, not an absence.
  */
-export async function getAflatSourcesPart({
+export async function getAflatCompletion({
   appConfig,
   endpoint,
   responseMessageId,
   timeoutMs,
-}: AflatSourcesPartParams): Promise<SourcesContentPart | null> {
+}: AflatSourcesPartParams): Promise<AflatCompletionEnvelope> {
   if (appConfig == null || endpoint == null || !responseMessageId) {
-    return null;
+    return { part: null, payload: null };
   }
   if (normalizeEndpointName(endpoint) !== normalizeEndpointName(AFLAT_ENDPOINT_NAME)) {
-    return null;
+    return { part: null, payload: null };
   }
 
   const endpointConfig = getCustomEndpointConfig({ endpoint, appConfig });
   if (endpointConfig == null) {
-    return null;
+    return { part: null, payload: null };
   }
 
   const baseURL = extractEnvVariable(endpointConfig.baseURL ?? '');
   const apiKey = extractEnvVariable(endpointConfig.apiKey ?? '');
   if (!baseURL || !apiKey || !baseURL.startsWith('http')) {
     logger.warn('[aflat/sources] ai-aflat endpoint has no usable baseURL/apiKey; skipping');
-    return null;
+    return { part: null, payload: null };
   }
 
   const payload = await fetchAflatSources({ baseURL, apiKey, responseMessageId, timeoutMs });
-  return buildAflatSourcesPart(payload);
+  return { part: buildAflatSourcesPart(payload), payload };
+}
+
+/** The citation-only view of {@link getAflatCompletion}, kept for existing callers. */
+export async function getAflatSourcesPart(
+  params: AflatSourcesPartParams,
+): Promise<SourcesContentPart | null> {
+  const { part } = await getAflatCompletion(params);
+  return part;
 }

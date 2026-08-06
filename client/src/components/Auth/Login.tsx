@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ErrorTypes, registerPage } from 'librechat-data-provider';
+import { ErrorTypes } from 'librechat-data-provider';
 import { OpenIDIcon, useToastContext } from '@librechat/client';
 import { useOutletContext, useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import type { TLoginLayoutContext } from '~/common';
@@ -10,7 +10,6 @@ import { useAuthContext } from '~/hooks/AuthContext';
 import { useLocalize } from '~/hooks';
 import useEmbeddedClerk from '~/components/Aflat/Auth/useEmbeddedClerk';
 import ClerkSignIn from '~/components/Aflat/Auth/ClerkSignIn';
-import LoginForm from './LoginForm';
 
 interface LoginLocationState {
   redirect_to?: string;
@@ -19,7 +18,7 @@ interface LoginLocationState {
 function Login() {
   const localize = useLocalize();
   const { showToast } = useToastContext();
-  const { error, setError, login } = useAuthContext();
+  const { error } = useAuthContext();
   const { startupConfig } = useOutletContext<TLoginLayoutContext>();
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -134,31 +133,13 @@ function Login() {
     );
   }
 
-  return (
-    <>
-      {error != null && <ErrorMessage>{localize(getLoginError(error))}</ErrorMessage>}
-      {startupConfig?.emailLoginEnabled === true && (
-        <LoginForm
-          onSubmit={login}
-          startupConfig={startupConfig}
-          error={error}
-          setError={setError}
-        />
-      )}
-      {startupConfig?.registrationEnabled === true && (
-        <p className="my-4 text-center text-sm font-light text-gray-700 dark:text-white">
-          {' '}
-          {localize('com_auth_no_account')}{' '}
-          <a
-            href={registerPage()}
-            className="inline-flex p-1 text-sm font-medium text-green-600 underline decoration-transparent transition-all duration-200 hover:text-green-700 hover:decoration-green-700 focus:text-green-700 focus:decoration-green-700 dark:text-green-500 dark:hover:text-green-400 dark:hover:decoration-green-400 dark:focus:text-green-400 dark:focus:decoration-green-400"
-          >
-            {localize('com_auth_sign_up')}
-          </a>
-        </p>
-      )}
-    </>
-  );
+  /**
+   * ai-aflat: no local email/password form. LibreChat's local auth was deleted
+   * (design 2026-08-04 §3), so when the embedded widget is not configured the
+   * only door left is the OIDC redirect — the button `AuthLayout` renders below
+   * this outlet via `SocialLoginRender`.
+   */
+  return <>{error != null && <ErrorMessage>{localize(getLoginError(error))}</ErrorMessage>}</>;
 }
 
 export default Login;

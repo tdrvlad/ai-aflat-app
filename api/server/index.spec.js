@@ -241,7 +241,10 @@ describe('Server Configuration', () => {
   it('should return 500 for unknown errors via ErrorController', async () => {
     // Testing the error handling here on top of unit tests to ensure the middleware is correctly integrated
 
-    // Mock MongoDB operations to fail
+    // ai-aflat: the product's local `/api/auth/login` was deleted with the rest
+    // of LibreChat's local auth. The admin panel's break-glass door is the only
+    // remaining route that reaches `User.findOne` before any auth guard, so it
+    // is what drives the error path here.
     const originalFindOne = mongoose.models.User.findOne;
     const mockError = new Error('MongoDB operation failed');
     mongoose.models.User.findOne = jest.fn().mockImplementation(() => {
@@ -249,7 +252,7 @@ describe('Server Configuration', () => {
     });
 
     try {
-      const response = await request(app).post('/api/auth/login').send({
+      const response = await request(app).post('/api/admin/login/local').send({
         email: 'test@example.com',
         password: 'password123',
       });

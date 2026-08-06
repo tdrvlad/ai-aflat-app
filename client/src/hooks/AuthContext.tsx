@@ -22,11 +22,10 @@ import type { ReactNode } from 'react';
 import {
   useGetRole,
   useGetUserQuery,
-  useLoginUserMutation,
   useLogoutUserMutation,
   useRefreshTokenMutation,
 } from '~/data-provider';
-import { TAuthConfig, TUserContext, TAuthContext, TResError } from '~/common';
+import { TAuthConfig, TUserContext, TAuthContext } from '~/common';
 import { SESSION_KEY, isSafeRedirect, getPostLoginRedirect } from '~/utils';
 import useTimeout from './useTimeout';
 import store from '~/store';
@@ -117,30 +116,6 @@ const AuthContextProvider = ({
   );
   const doSetError = useTimeout({ callback: (error) => setError(error as string | undefined) });
 
-  const loginUser = useLoginUserMutation({
-    onSuccess: (data: t.TLoginResponse) => {
-      const { user, token, twoFAPending, tempToken } = data;
-      if (twoFAPending) {
-        navigate(`/login/2fa?tempToken=${tempToken}`, { replace: true });
-        return;
-      }
-      setError(undefined);
-      setUserContext({ token, isAuthenticated: true, user, redirect: '/c/new' });
-    },
-    onError: (error: TResError | unknown) => {
-      const resError = error as TResError;
-      doSetError(resError.message);
-      // Preserve a valid redirect_to across login failures so the deep link survives retries.
-      // Cannot use buildLoginRedirectUrl() here — it reads the current pathname (already /login)
-      // and would return plain /login, dropping the redirect_to destination.
-      const redirectTo = new URLSearchParams(window.location.search).get('redirect_to');
-      const loginPath =
-        redirectTo && isSafeRedirect(redirectTo)
-          ? `/login?redirect_to=${encodeURIComponent(redirectTo)}`
-          : '/login';
-      navigate(loginPath, { replace: true });
-    },
-  });
   const logoutUser = useLogoutUserMutation({
     onSuccess: (data) => {
       if (data.redirect) {
@@ -183,10 +158,6 @@ const AuthContextProvider = ({
   );
 
   const userQuery = useGetUserQuery({ enabled: !!(token ?? '') });
-
-  const login = (data: t.TLoginUser) => {
-    loginUser.mutate(data);
-  };
 
   /**
    * ai-aflat: turn a session that already exists on the server into an
@@ -333,7 +304,6 @@ const AuthContextProvider = ({
       user,
       token,
       error,
-      login,
       logout,
       setError,
       establishSession,

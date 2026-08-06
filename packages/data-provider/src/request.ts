@@ -106,6 +106,29 @@ const stripBasePath = (pathname: string) => {
 
 const isSharePage = () => SHARE_PAGE_PATH_REGEX.test(stripBasePath(window.location.pathname));
 
+/**
+ * ai-aflat: the anonymous chat surface owns the page while a visitor is asking
+ * their first question and signing in through the embedded modal.
+ *
+ * While it does, a failed auth recovery must NEVER navigate. `redirectToLoginOnce`
+ * sets `window.location.href`, which is a full page load: it tears down the login
+ * modal mid-flow, discards the Clerk attempt in progress and resets the thread
+ * holding the parked question — measured live 2026-08-06, and it is exactly the
+ * "chat window refreshed and I lost my question" report. A stale session's 401 on
+ * this surface means "you are anonymous", which is precisely the state the page
+ * is already built to be in; the recovery is to drop the stale header, not to
+ * reload into a login screen the visitor is *already looking at*.
+ *
+ * Page-lifetime state on `window`, set by the anonymous surface on mount and
+ * cleared when a session is established — same pattern as the auth-recovery
+ * state above, for the same reason.
+ */
+type AnonSurfaceWindow = Window & { __aflatAnonSurface?: boolean };
+export const setAnonAuthSurface = (active: boolean) => {
+  (window as AnonSurfaceWindow).__aflatAnonSurface = active;
+};
+const isAnonAuthSurface = () => (window as AnonSurfaceWindow).__aflatAnonSurface === true;
+
 const getRequestPathname = (url?: string) => {
   if (typeof url !== 'string') {
     return '';
@@ -343,6 +366,18 @@ if (typeof window !== 'undefined') {
           if (token) {
             setRequestAuthorizationHeader(originalRequest, token);
             return await axios(originalRequest);
+          }
+
+          /**
+           * ai-aflat: on the anonymous surface a dead session is the expected
+           * state, not an emergency. Drop the stale header so later requests
+           * take the quiet no-header path above, and leave the page alone —
+           * the visitor is mid-question or mid-sign-in, and a redirect here
+           * costs them both. See `setAnonAuthSurface`.
+           */
+          if (isAnonAuthSurface()) {
+            delete axios.defaults.headers.common['Authorization'];
+            return Promise.reject(error);
           }
 
           redirectToLoginOnce();

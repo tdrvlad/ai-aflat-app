@@ -58,10 +58,14 @@ export default function LoginModal({
       >
         <div className="aa-tricolor" aria-hidden="true" />
         <div className="flex flex-col gap-4 px-6 pb-6 pt-5">
-          <div className="flex flex-col gap-1.5">
-            <OGDialogTitle>{localize('com_aflat_gate_title')}</OGDialogTitle>
-            <p className="m-0 text-sm text-text-secondary">{localize('com_aflat_gate_body')}</p>
-          </div>
+          {/**
+           * Title only. The reassurance that the question is safe is already on
+           * screen, in the parked-question note directly above this modal
+           * („Rămâne în browserul tău — o trimitem imediat ce ai cont"), and the
+           * title already carries the ask — a body paragraph here said both of
+           * them a third time (2026-08-06).
+           */}
+          <OGDialogTitle>{localize('com_aflat_gate_title')}</OGDialogTitle>
 
           {/**
            * Reserved, not fixed. Clerk's widget genuinely changes height between

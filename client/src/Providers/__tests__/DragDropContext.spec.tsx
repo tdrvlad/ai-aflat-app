@@ -29,6 +29,11 @@ jest.mock('../ChatContext', () => ({
   useChatContext: () => ({ conversation: mockConversation }),
 }));
 
+/* The endpoints query is gated on auth (anonymous surface must not 401-loop). */
+jest.mock('~/hooks/AuthContext', () => ({
+  useAuthContext: () => ({ isAuthenticated: true }),
+}));
+
 function wrapper({ children }: { children: React.ReactNode }) {
   return <DragDropProvider>{children}</DragDropProvider>;
 }

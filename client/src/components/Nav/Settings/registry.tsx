@@ -17,10 +17,8 @@ import {
 } from '../SettingsTabs/Speech/STT';
 import DisplayUsernameMessages from '../SettingsTabs/Account/DisplayUsernameMessages';
 import ConversationModeSwitch from '../SettingsTabs/Speech/ConversationModeSwitch';
-import EnableTwoFactorItem from '../SettingsTabs/Account/TwoFactorAuthentication';
 import ImportConversations from '../SettingsTabs/Data/ImportConversations';
 import { toggleControl, ThemeSetting, LangSetting } from './controls';
-import BackupCodesItem from '../SettingsTabs/Account/BackupCodesItem';
 import { EngineSTTSetting, EngineTTSSetting } from './SpeechControls';
 import FontSizeSelector from '../SettingsTabs/Chat/FontSizeSelector';
 import AdvancedPrompts from '../SettingsTabs/Chat/AdvancedPrompts';
@@ -514,23 +512,6 @@ export const registry: SettingEntry[] = [
     section: 'profile',
     labelKey: 'com_ui_settings_label_avatar',
     Component: Avatar,
-  },
-  // Account · Security
-  {
-    id: 'twoFactor',
-    tab: ACCOUNT,
-    section: 'security',
-    labelKey: 'com_ui_settings_label_2fa',
-    show: (ctx) => ctx.isLocalProvider,
-    Component: EnableTwoFactorItem,
-  },
-  {
-    id: 'backupCodes',
-    tab: ACCOUNT,
-    section: 'security',
-    labelKey: 'com_ui_settings_label_backup_codes',
-    show: (ctx) => ctx.isLocalProvider && ctx.twoFactorEnabled,
-    Component: BackupCodesItem,
   },
   // Account · Billing
   {

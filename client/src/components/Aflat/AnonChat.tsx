@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { setAnonAuthSurface } from 'librechat-data-provider';
 import { SendIcon, TextareaAutosize } from '@librechat/client';
 import { BrandMark } from '~/components/Brand';
 import LoginModal from './Auth/LoginModal';
@@ -75,6 +76,22 @@ export default function AnonChat({ onSignedIn }: { onSignedIn: () => void }) {
     },
     [],
   );
+
+  /**
+   * While this surface is mounted, a failed auth recovery must not navigate —
+   * a stale session's 401 here means "you are anonymous", which is the state
+   * this screen already is. Without this flag the axios interceptor answers
+   * that 401 with `window.location.href`, a full reload that tears down the
+   * login modal mid-sign-in and discards the parked question — the measured
+   * "chat window refreshed and I lost my question" failure (2026-08-06).
+   * Cleared on unmount: this component unmounting IS the session arriving.
+   */
+  useEffect(() => {
+    setAnonAuthSurface(true);
+    return () => {
+      setAnonAuthSurface(false);
+    };
+  }, []);
 
   /**
    * The one send path, shared by the composer and the example questions.

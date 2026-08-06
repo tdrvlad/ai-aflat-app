@@ -4,7 +4,7 @@ const { limiterCache, removePorts } = require('@librechat/api');
 /**
  * ai-aflat: abuse control for the "colectorul" endpoints.
  *
- * Built exactly like `registerLimiter` — same `express-rate-limit` options, same
+ * Built exactly like the other limiters here — same `express-rate-limit` options, same
  * `removePorts` key generator, same `limiterCache` store — with two deliberate
  * differences:
  *

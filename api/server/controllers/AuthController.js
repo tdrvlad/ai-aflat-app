@@ -10,20 +10,11 @@ const {
   buildOpenIDRefreshParams,
 } = require('@librechat/api');
 const {
-  requestPasswordReset,
   setOpenIDAuthTokens,
   setCloudFrontAuthCookies,
-  resetPassword,
   setAuthTokens,
-  registerUser,
 } = require('~/server/services/AuthService');
-const {
-  deleteAllUserSessions,
-  getUserById,
-  findSession,
-  updateUser,
-  findUser,
-} = require('~/models');
+const { getUserById, findSession, updateUser, findUser } = require('~/models');
 const { getGraphApiToken } = require('~/server/services/GraphTokenService');
 const { getOpenIdConfig, getOpenIdEmail } = require('~/strategies');
 
@@ -41,17 +32,6 @@ const OPENID_REUSE_MAX_SESSION_AGE_MS = math(
   process.env.OPENID_REUSE_MAX_SESSION_AGE_MS,
   15 * 60 * 1000,
 );
-
-const registrationController = async (req, res) => {
-  try {
-    const response = await registerUser(req.body);
-    const { status, message } = response;
-    res.status(status).send({ message });
-  } catch (err) {
-    logger.error('[registrationController]', err);
-    return res.status(500).json({ message: err.message });
-  }
-};
 
 const sanitizeUserForAuthResponse = (user) => {
   const source = (typeof user?.toObject === 'function' ? user.toObject() : user) || {};
@@ -117,39 +97,6 @@ const getReusableOpenIDSessionToken = (openidTokens) => {
   }
 
   return null;
-};
-
-const resetPasswordRequestController = async (req, res) => {
-  try {
-    const resetService = await requestPasswordReset(req);
-    if (resetService instanceof Error) {
-      return res.status(400).json(resetService);
-    } else {
-      return res.status(200).json(resetService);
-    }
-  } catch (e) {
-    logger.error('[resetPasswordRequestController]', e);
-    return res.status(400).json({ message: e.message });
-  }
-};
-
-const resetPasswordController = async (req, res) => {
-  try {
-    const resetPasswordService = await resetPassword(
-      req.body.userId,
-      req.body.token,
-      req.body.password,
-    );
-    if (resetPasswordService instanceof Error) {
-      return res.status(400).json(resetPasswordService);
-    } else {
-      await deleteAllUserSessions({ userId: req.body.userId });
-      return res.status(200).json(resetPasswordService);
-    }
-  } catch (e) {
-    logger.error('[resetPasswordController]', e);
-    return res.status(400).json({ message: e.message });
-  }
 };
 
 const refreshController = async (req, res) => {
@@ -345,8 +292,5 @@ const graphTokenController = async (req, res) => {
 
 module.exports = {
   refreshController,
-  registrationController,
-  resetPasswordController,
-  resetPasswordRequestController,
   graphTokenController,
 };
