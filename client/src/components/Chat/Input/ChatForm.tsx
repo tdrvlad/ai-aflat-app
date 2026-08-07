@@ -29,7 +29,6 @@ import PendingQuoteChips from './PendingQuoteChips';
 import AttachFileChat from './Files/AttachFileChat';
 import FileFormChat from './Files/FileFormChat';
 import TextareaHeader from './TextareaHeader';
-import PromptsCommand from './PromptsCommand';
 import CollapseChat from './CollapseChat';
 import QuoteButton from './QuoteButton';
 import StreamAudio from './StreamAudio';
@@ -168,7 +167,7 @@ const ChatForm = memo(function ChatForm({
     isSubmitting,
   });
 
-  const { submitMessage, submitPrompt } = useSubmitMessage();
+  const { submitMessage } = useSubmitMessage();
 
   const handleKeyUp = useHandleKeyUp({
     index,
@@ -281,7 +280,6 @@ const ChatForm = memo(function ChatForm({
             newConversation={newConversation}
             textAreaRef={textAreaRef}
           />
-          <PromptsCommand index={index} textAreaRef={textAreaRef} submitPrompt={submitPrompt} />
           <div
             onClick={handleContainerClick}
             className={cn(

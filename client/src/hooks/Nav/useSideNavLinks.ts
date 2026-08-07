@@ -22,7 +22,6 @@ import BookmarkPanel from '~/components/SidePanel/Bookmarks/BookmarkPanel';
 import Parameters from '~/components/SidePanel/Parameters/Panel';
 import { MemoryPanel } from '~/components/SidePanel/Memories';
 import FilesPanel from '~/components/SidePanel/Files/Panel';
-import { PromptsAccordion } from '~/components/Prompts';
 
 export default function useSideNavLinks({
   hidePanel,
@@ -41,14 +40,6 @@ export default function useSideNavLinks({
   endpointsConfig: TEndpointsConfig;
   includeHidePanel?: boolean;
 }) {
-  const hasAccessToPrompts = useHasAccess({
-    permissionType: PermissionTypes.PROMPTS,
-    permission: Permissions.USE,
-  });
-  const hasAccessToSkills = useHasAccess({
-    permissionType: PermissionTypes.SKILLS,
-    permission: Permissions.USE,
-  });
   const hasAccessToBookmarks = useHasAccess({
     permissionType: PermissionTypes.BOOKMARKS,
     permission: Permissions.USE,
@@ -62,21 +53,8 @@ export default function useSideNavLinks({
     permission: Permissions.READ,
   });
 
-  const { agentsConfig } = useGetAgentsConfig({ endpointsConfig });
-  const { skillsEnabled } = useAgentCapabilities(agentsConfig?.capabilities);
-
   const Links = useMemo(() => {
     const links: NavLink[] = [];
-
-    if (hasAccessToPrompts) {
-      links.push({
-        title: 'com_ui_prompts',
-        label: '',
-        icon: NotebookPen,
-        id: 'prompts',
-        Component: PromptsAccordion,
-      });
-    }
 
     if (hasAccessToMemories && hasAccessToReadMemories) {
       links.push({
@@ -135,7 +113,6 @@ export default function useSideNavLinks({
   }, [
     endpoint,
     keyProvided,
-    hasAccessToPrompts,
     hasAccessToMemories,
     hasAccessToReadMemories,
     interfaceConfig.parameters,

@@ -12,7 +12,6 @@ export * from './MCP';
 export * from './Mermaid';
 export * from './Messages';
 export * from './Plugins';
-export * from './Prompts';
 export * from './Roles';
 export * from './Sharing';
 export * from './SSE';

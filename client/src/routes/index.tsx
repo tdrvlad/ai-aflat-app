@@ -20,11 +20,6 @@ const AuthLayout = () => (
   </AuthContextProvider>
 );
 
-const loadInlinePromptsView = () =>
-  import('~/components/Prompts/layouts/InlinePromptsView').then((m) => ({
-    Component: m.default,
-  }));
-
 /** ai-aflat wallet. Lazy: most sessions never open it. */
 const loadWallet = () =>
   import('~/components/Aflat/Wallet').then((m) => ({
@@ -110,18 +105,6 @@ export const router = createBrowserRouter(
               /* ai-aflat — the wallet. English slug, Romanian labels. */
               path: 'credits',
               lazy: loadWallet,
-            },
-            {
-              path: 'prompts',
-              element: <Navigate to="/prompts/new" replace={true} />,
-            },
-            {
-              path: 'prompts/new',
-              lazy: loadInlinePromptsView,
-            },
-            {
-              path: 'prompts/:promptId',
-              lazy: loadInlinePromptsView,
             },
           ],
         },
