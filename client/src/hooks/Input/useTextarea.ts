@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useMemo } from 'react';
 import debounce from 'lodash/debounce';
-import { useRecoilValue, useRecoilState } from 'recoil';
+import { useRecoilValue } from 'recoil';
 import type { TEndpointOption } from 'librechat-data-provider';
 import type { KeyboardEvent } from 'react';
 import {
@@ -68,7 +68,6 @@ export default function useTextarea({
 
   const { index, conversation, isSubmitting, filesLoading, setFilesLoading } = useChatContext();
   const latestMessage = useLatestMessage(index);
-  const [activePrompt, setActivePrompt] = useRecoilState(store.activePromptByIndex(index));
 
   const { endpoint = '' } = conversation || {};
   const { entity, isAgent, isAssistant } = getEntity({
@@ -83,15 +82,6 @@ export default function useTextarea({
   const isNotAppendable =
     latestMessage?.error === true && latestMessage.isCreatedByUser === true && !isAssistant;
   // && (conversationId?.length ?? 0) > 6; // also ensures that we don't show the wrong placeholder
-
-  useEffect(() => {
-    const prompt = activePrompt ?? '';
-    if (prompt && textAreaRef.current) {
-      insertTextAtCursor(textAreaRef.current, prompt);
-      forceResize(textAreaRef.current);
-      setActivePrompt(undefined);
-    }
-  }, [activePrompt, setActivePrompt, textAreaRef]);
 
   useEffect(() => {
     const currentValue = textAreaRef.current?.value ?? '';

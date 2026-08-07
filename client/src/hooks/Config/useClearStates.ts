@@ -42,7 +42,6 @@ export default function useClearStates() {
             reset(store.pendingManualSkillsByConvoId(convoId));
             reset(store.pendingQuotesByConvoId(convoId));
           }
-          reset(store.activePromptByIndex(key));
           reset(store.globalAudioURLFamily(key));
           reset(store.globalAudioFetchingFamily(key));
           reset(store.globalAudioPlayingFamily(key));
