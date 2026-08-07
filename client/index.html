@@ -120,6 +120,40 @@
           }
           return true;
         };
+        /**
+         * Retire any service worker this browser still carries — silently, and
+         * without a navigate.
+         *
+         * The worker is retired (see vite.config.ts), but a browser that
+         * registered one on an earlier build keeps it until something removes
+         * it. Leaving that to the self-destructing `sw.js` costs a full page
+         * reload, because its activate handler navigates every window client —
+         * and a reload lands on the sign-in exchange often enough to make
+         * signing in take two or three attempts. Unregistering from here has
+         * the same end state and reloads nothing: the retired worker never
+         * activates, so it never navigates anybody.
+         *
+         * Scope-filtered, so a worker belonging to another app on the same
+         * host is left alone. Deliberately not guarded by `shouldRecover()` —
+         * this is idempotent and free once no registration remains.
+         */
+        if (navigator.serviceWorker) {
+          try {
+            var swScope = new URL('./', document.baseURI || window.location.href).href;
+            navigator.serviceWorker
+              .getRegistrations()
+              .then(function (registrations) {
+                registrations.forEach(function (registration) {
+                  if (registration.scope.indexOf(swScope) === 0) {
+                    registration.unregister();
+                  }
+                });
+              })
+              .catch(function () {});
+          } catch (e) {
+            /* never let cleanup break the boot */
+          }
+        }
         if (navigator.serviceWorker) {
           navigator.serviceWorker.addEventListener('message', function (event) {
             if (!event.data || event.data.type !== 'LC_SW_PING') {

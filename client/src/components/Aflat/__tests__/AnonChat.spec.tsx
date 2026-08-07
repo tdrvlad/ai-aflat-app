@@ -16,9 +16,20 @@ jest.mock('~/data-provider', () => ({
   useGetStartupConfig: () => ({ data: { clerkPublishableKey: 'pk_test_stub' } }),
 }));
 
+jest.mock('../Auth/ClerkBridge', () => ({
+  __esModule: true,
+  useAnonAuth: () => ({
+    status: 'idle',
+    failure: null,
+    retry: () => undefined,
+    enabled: true,
+  }),
+}));
+
 jest.mock('../Auth/ClerkSignIn', () => ({
   __esModule: true,
   default: () => <div data-testid="clerk-signin-stub" />,
+  SignInPanel: () => <div data-testid="clerk-signin-stub" />,
 }));
 
 /**
@@ -59,7 +70,7 @@ describe('AnonChat (the signed-out chat screen)', () => {
   const CHIP = 'What are my rights if my flight is cancelled?';
 
   it('renders the heading, the framing sub-line and the starter chips', () => {
-    render(<AnonChat onSignedIn={jest.fn()} />);
+    render(<AnonChat />);
 
     expect(
       screen.getByRole('heading', { name: 'Ask anything about Romanian legislation' }),
@@ -75,7 +86,7 @@ describe('AnonChat (the signed-out chat screen)', () => {
    * screen may ask a stranger to agree to anything.
    */
   it('goes straight from the send to the login gate, asking for no acknowledgement', async () => {
-    render(<AnonChat onSignedIn={jest.fn()} />);
+    render(<AnonChat />);
 
     typeQuestion('Câte zile de preaviz am?');
     send();
@@ -95,7 +106,7 @@ describe('AnonChat (the signed-out chat screen)', () => {
    * consent yet to store it under.
    */
   it('sends the question nowhere and keeps it in the browser', async () => {
-    render(<AnonChat onSignedIn={jest.fn()} />);
+    render(<AnonChat />);
 
     typeQuestion('Câte zile de preaviz am?');
     send();
@@ -123,9 +134,14 @@ describe('AnonChat (the signed-out chat screen)', () => {
     expect(eventCalls().map(([, init]) => JSON.parse(init.body))).toEqual([{ name: 'gate_shown' }]);
   });
 
-  /** Backing out keeps the thread and the held question, not a fresh empty chat. */
-  it('returns to the thread when the login modal is dismissed', async () => {
-    render(<AnonChat onSignedIn={jest.fn()} />);
+  /**
+   * The gate does not close (ruled 2026-08-07, reversing the earlier call):
+   * the parked question can only progress through an account, so a dismissal
+   * would return the visitor to a thread that can never move. Escape must
+   * leave the modal, the thread and the held question all in place.
+   */
+  it('keeps the login modal open on Escape — signing in is the only way forward', async () => {
+    render(<AnonChat />);
 
     typeQuestion('Câte zile de preaviz am?');
     send();
@@ -135,7 +151,7 @@ describe('AnonChat (the signed-out chat screen)', () => {
     });
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
-    await waitFor(() => expect(screen.queryByTestId('aflat-login-modal')).not.toBeInTheDocument());
+    expect(screen.getByTestId('aflat-login-modal')).toBeVisible();
     expect(screen.getByTestId('aflat-user-bubble')).toHaveTextContent('Câte zile de preaviz am?');
     expect(stash()).toMatchObject({ text: 'Câte zile de preaviz am?' });
   });
@@ -146,7 +162,7 @@ describe('AnonChat (the signed-out chat screen)', () => {
    * example filled the box they could have typed in.
    */
   it('holds a tapped starter in the composer before sending it', async () => {
-    render(<AnonChat onSignedIn={jest.fn()} />);
+    render(<AnonChat />);
 
     fireEvent.click(screen.getByText(CHIP));
 
@@ -159,7 +175,7 @@ describe('AnonChat (the signed-out chat screen)', () => {
 
   /** One tap, one question — a second tap during the dwell must not send twice. */
   it('holds a starter once when tapped repeatedly', async () => {
-    render(<AnonChat onSignedIn={jest.fn()} />);
+    render(<AnonChat />);
 
     const chip = screen.getByText(CHIP);
     fireEvent.click(chip);
@@ -173,7 +189,7 @@ describe('AnonChat (the signed-out chat screen)', () => {
 
   /** Typing during the dwell means the visitor changed their mind. */
   it('cancels a tapped starter when the visitor types instead', async () => {
-    render(<AnonChat onSignedIn={jest.fn()} />);
+    render(<AnonChat />);
 
     fireEvent.click(screen.getByText(CHIP));
     typeQuestion('Ce drepturi am?');
@@ -197,7 +213,7 @@ describe('AnonChat (the signed-out chat screen)', () => {
     });
 
     try {
-      render(<AnonChat onSignedIn={jest.fn()} />);
+      render(<AnonChat />);
 
       typeQuestion('Ce drepturi am?');
       send();

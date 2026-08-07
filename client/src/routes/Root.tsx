@@ -21,6 +21,7 @@ import KeyboardDeleteDialog from '~/components/Nav/KeyboardDeleteDialog';
 import { useUserTermsQuery, useGetStartupConfig } from '~/data-provider';
 import useKeyboardShortcuts from '~/hooks/useKeyboardShortcuts';
 import { UnifiedSidebar } from '~/components/UnifiedSidebar';
+import { AnonClerkProvider } from '~/components/Aflat/Auth/ClerkBridge';
 import useDevAutoLogin from '~/components/Aflat/useDevAutoLogin';
 import ConsentModal from '~/components/Aflat/ConsentModal';
 import AnonShell from '~/components/Aflat/AnonShell';
@@ -91,9 +92,19 @@ export default function Root() {
    */
   if (!isAuthenticated) {
     return (
-      <AnonShell>
-        <Outlet />
-      </AnonShell>
+      /**
+       * Clerk mounts with the shell, not with the login modal. The bridge
+       * inside `AnonClerkProvider` is what turns a Clerk session into an app
+       * session wherever it comes from — the modal's popup, a full-page
+       * redirect return, an email link opened in a new tab — and adopting one
+       * flips `isAuthenticated`, which swaps this entire tree (corner sign-in
+       * link included) for the signed-in shell below.
+       */
+      <AnonClerkProvider>
+        <AnonShell>
+          <Outlet />
+        </AnonShell>
+      </AnonClerkProvider>
     );
   }
 

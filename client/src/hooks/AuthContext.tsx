@@ -25,6 +25,7 @@ import {
   useLogoutUserMutation,
   useRefreshTokenMutation,
 } from '~/data-provider';
+import { markClerkSignOutPending } from '~/components/Aflat/Auth/clerkSignOut';
 import { TAuthConfig, TUserContext, TAuthContext } from '~/common';
 import { SESSION_KEY, isSafeRedirect, getPostLoginRedirect } from '~/utils';
 import useTimeout from './useTimeout';
@@ -152,6 +153,16 @@ const AuthContextProvider = ({
       if (redirect) {
         logoutRedirectRef.current = redirect;
       }
+      /**
+       * ai-aflat: Clerk's session cannot be ended from here (no clerk-js in
+       * the authenticated tree, and Clerk publishes no `end_session_endpoint`
+       * for the server to cascade to). Left alive, that session would be
+       * re-adopted by the anonymous shell's bridge the moment it mounts —
+       * signing the user straight back in. The marker tells the bridge to
+       * spend the surviving session with `clerk.signOut()` instead of
+       * exchanging it.
+       */
+      markClerkSignOutPending();
       logoutUser.mutate(undefined);
     },
     [logoutUser],

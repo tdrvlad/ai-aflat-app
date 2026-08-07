@@ -16,6 +16,7 @@
   "com_aflat_auth_domain_blocked": "Contul tău nu are acces la aplicație deocamdată.",
   "com_aflat_auth_email_missing": "Nu am putut citi adresa ta de email la autentificare. Încearcă altă metodă sau scrie-ne.",
   "com_aflat_auth_exchange_failed": "Nu am putut finaliza autentificarea. Încearcă din nou.",
+  "com_aflat_auth_retry": "Încearcă din nou",
   "com_aflat_auth_signing_in": "Te conectăm…",
   "com_aflat_auth_use_fallback": "Încearcă cealaltă metodă de autentificare",
   "com_aflat_chat_placeholder": "Scrie întrebarea ta despre legislație",

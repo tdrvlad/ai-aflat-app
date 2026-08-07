@@ -106,7 +106,29 @@ export default defineConfig(({ command }) => ({
        * worker-triggered reload.
        */
       selfDestroying: true,
-      injectRegister: 'auto', // 'auto' | 'manual' | 'disabled'
+      /**
+       * NOTHING REGISTERS THE WORKER ANY MORE. This is load-bearing, and it is
+       * why `selfDestroying` alone did not close the bug above.
+       *
+       * `'auto'` injects `registerSW.js` into `index.html`, which registers
+       * `./sw.js` on *every* page load. Paired with `selfDestroying`, the
+       * script it registers is the self-destruct worker — whose activate
+       * handler ends with `client.navigate(client.url)`, i.e. a full reload of
+       * every open tab. So each load re-armed a worker that reloaded the page a
+       * second or two later, forever: retiring the worker had installed a
+       * reload loop instead of removing one. Measured 2026-08-07, after the
+       * "fix", on a real browser — sign-in took three attempts because only an
+       * attempt that finished inside the gap between two reloads survived.
+       *
+       * Browsers that still carry a registration from an older build are
+       * cleaned up by the boot script in `index.html` (silently, no navigate),
+       * with `/sw.js` kept on the server as the fallback for anyone booting a
+       * cached copy of the old `index.html`.
+       *
+       * Automated browsers do not catch this: Playwright no-ops `register()`,
+       * so an E2E run is structurally blind to it. Verify in a real browser.
+       */
+      injectRegister: false,
       registerType: 'autoUpdate', // 'prompt' | 'autoUpdate'
       devOptions: {
         enabled: false, // disable service worker registration in development mode

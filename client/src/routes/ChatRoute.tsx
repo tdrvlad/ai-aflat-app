@@ -282,13 +282,13 @@ export default function ChatRoute() {
    * disabled without a session — and a disabled React Query reports `isLoading`,
    * so an anonymous visitor would otherwise sit under a spinner forever.
    *
-   * `onSignedIn` intentionally does nothing but let the render fall through:
-   * `establishSession` has already flipped the auth context in place, so this
-   * component unmounts, `ChatView` mounts in the same tree, and the parked
-   * question is claimed and submitted by `usePostLoginHandoff` in `ChatForm`.
+   * Nothing here reacts to the sign-in: the shell-level bridge establishes the
+   * session in place and flips the auth context, so this component re-renders,
+   * `ChatView` mounts in the same tree, and the parked question is claimed and
+   * submitted by `usePostLoginHandoff` in `ChatForm`.
    */
   if (!isAuthenticated) {
-    return <AnonChat onSignedIn={() => undefined} />;
+    return <AnonChat />;
   }
 
   if (endpointsQuery.isLoading || modelsQuery.isLoading) {

@@ -1,7 +1,8 @@
 import { OGDialog, OGDialogContent, OGDialogTitle } from '@librechat/client';
-import { useGetStartupConfig } from '~/data-provider';
+import { useAnonAuth } from './ClerkBridge';
+import { SignInPanel } from './ClerkSignIn';
+import { traceAuth } from './authTrace';
 import { postAflatEvent } from '../events';
-import ClerkSignIn from './ClerkSignIn';
 import { useLocalize } from '~/hooks';
 import { useEffect } from 'react';
 
@@ -9,47 +10,45 @@ import { useEffect } from 'react';
  * The identity step, held over the conversation rather than navigated to.
  *
  * The question is already parked and visible behind the dim; this modal is the
- * only thing between it and an answer. It never navigates — `ClerkSignIn`
- * establishes the session in place and calls `onSignedIn`, so the modal closes
- * onto the same thread, same scroll position, same conversation id. That
- * continuity is the whole reason the redesign has one chat screen instead of a
- * separate `/ask`.
+ * only thing between it and an answer. It never navigates — the shell-level
+ * bridge (`ClerkBridge.tsx`) establishes the session in place, `Root` swaps
+ * the anonymous tree for the signed-in one, and the thread continues: same
+ * scroll, same conversation id. That continuity is the whole reason the
+ * redesign has one chat screen instead of a separate `/ask`.
  *
- * Dismissible on purpose. Someone who backs out keeps their question — it is
- * held for 24 hours and offered back on their next visit — so trapping them here
- * would buy nothing and cost the trust the parked question was meant to earn.
+ * NOT dismissible — ruled by Vlad 2026-08-07, reversing the earlier call. The
+ * parked question is the incentive to create an account, and the account is
+ * the only way the question can be answered; a dismissal returns the visitor
+ * to a thread that can never progress, which reads as the product stalling
+ * rather than the visitor choosing. Escape and the overlay do nothing; the
+ * ways forward are signing in, or — if the exchange itself fails — the retry
+ * and full-page fallback links `SignInPanel` shows. A reload also works and
+ * keeps the question: the stash survives in `localStorage`.
  */
-export default function LoginModal({
-  open,
-  onSignedIn,
-  onDismiss,
-}: {
-  open: boolean;
-  onSignedIn: () => void;
-  onDismiss: () => void;
-}) {
+export default function LoginModal({ open }: { open: boolean }) {
   const localize = useLocalize();
-  const { data: startupConfig } = useGetStartupConfig();
-  const publishableKey = startupConfig?.clerkPublishableKey ?? null;
+  const anonAuth = useAnonAuth();
 
   useEffect(() => {
     if (open) {
+      traceAuth('gate_shown');
       postAflatEvent('gate_shown');
     }
   }, [open]);
 
-  if (!open || !publishableKey) {
+  /**
+   * `enabled` is false when Clerk is unconfigured — there is no widget to
+   * show, and an empty, undismissable dialog would be a trap.
+   */
+  if (!open || !anonAuth.enabled) {
     return null;
   }
 
   return (
     <OGDialog
       open={true}
-      onOpenChange={(next) => {
-        if (!next) {
-          onDismiss();
-        }
-      }}
+      /* Deliberately inert: see the component comment — the gate does not close. */
+      onOpenChange={() => undefined}
     >
       <OGDialogContent
         data-testid="aflat-login-modal"
@@ -83,7 +82,7 @@ export default function LoginModal({
            * before Clerk paints; past that, the step decides the height.
            */}
           <div className="min-h-[180px]">
-            <ClerkSignIn publishableKey={publishableKey} onSignedIn={onSignedIn} />
+            <SignInPanel bridge={anonAuth} />
           </div>
 
           <p className="m-0 text-xs leading-relaxed text-text-tertiary">

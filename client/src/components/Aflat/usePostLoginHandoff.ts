@@ -3,6 +3,7 @@ import { Constants, apiBaseUrl, request } from 'librechat-data-provider';
 import { useChatContext } from '~/Providers/ChatContext';
 import { useAuthContext } from '~/hooks/AuthContext';
 import useSubmitMessage from '~/hooks/Messages/useSubmitMessage';
+import { traceAuth } from './Auth/authTrace';
 import { useConsentStatus } from './consent';
 import { HANDOFF_MAX_AGE_MS, clearStash, readStash, saveStash } from './anonStash';
 
@@ -341,6 +342,7 @@ export default function usePostLoginHandoff() {
       let delivered = false;
       try {
         delivered = deliverable() && submitRef.current({ text: pending.text }) !== false;
+        traceAuth('handoff_submitted', { delivered });
       } finally {
         if (!delivered) {
           /* Still ours, still unasked — keep both records of that for a later mount. */

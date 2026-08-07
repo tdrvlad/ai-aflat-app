@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { roRO } from '@clerk/localizations';
 import { ClerkProvider, SignIn, useAuth, useClerk } from '@clerk/clerk-react';
-import { apiBaseUrl, request } from 'librechat-data-provider';
 import { Spinner } from '@librechat/client';
-import type { TRefreshTokenResponse } from 'librechat-data-provider';
-import { useAuthContext, useLocalize } from '~/hooks';
+import type { ClerkBridgeState } from './ClerkBridge';
+import { useClerkBridge } from './ClerkBridge';
+import { useLocalize } from '~/hooks';
 import type { TranslationKeys } from '~/hooks';
 
 /**
@@ -14,14 +14,13 @@ import type { TranslationKeys } from '~/hooks';
  * Replaces the redirect to Clerk's hosted page, which was neither our page nor
  * instant — the load delay read as a stall rather than a step.
  *
- * The widget authenticates against Clerk; `ClerkHandoff` then exchanges the
- * resulting Clerk session for a LibreChat one. Nothing here mints a session
- * itself; see `docs/superpowers/specs/2026-08-04-clerk-embedded-auth-design.md`.
+ * The widget only authenticates against Clerk. Exchanging the resulting Clerk
+ * session for a LibreChat one is `useClerkBridge`'s job (`ClerkBridge.tsx`),
+ * which deliberately lives *above* any surface that mounts and unmounts around
+ * the sign-in moment. This file is presentation: the widget, restyled to pass
+ * for part of our page, plus the busy/failed states the bridge reports.
+ * See `docs/superpowers/specs/2026-08-04-clerk-embedded-auth-design.md`.
  */
-
-const exchangeUrl = () => `${apiBaseUrl()}/api/aflat/auth/clerk`;
-
-type HandoffState = 'idle' | 'exchanging' | 'failed';
 
 /** Server error codes that deserve a specific explanation rather than a generic one. */
 const FAILURE_KEYS: Record<string, TranslationKeys> = {
@@ -30,20 +29,6 @@ const FAILURE_KEYS: Record<string, TranslationKeys> = {
   email_missing: 'com_aflat_auth_email_missing',
 };
 
-/**
- * Runs the moment Clerk reports a signed-in session.
- *
- * The exchange sets an httpOnly refresh cookie and returns nothing else, so the
- * page has to go and redeem it. `establishSession` does that through the app's
- * existing refresh path — the same step a cold load performs — and then swaps the
- * auth context in place.
- *
- * In place is the requirement, not an optimisation. This widget renders inside a
- * modal over a conversation that already holds the user's parked question; a
- * reload would remount that conversation and make them watch the app boot at
- * precisely the moment they are owed an answer. `onSignedIn` closes the modal
- * and the thread continues, same scroll, same conversation id.
- */
 /**
  * The widget resumes whatever sign-in attempt the Clerk client already holds —
  * and an abandoned attempt survives the page, the modal and even a cookie
@@ -56,9 +41,8 @@ const FAILURE_KEYS: Record<string, TranslationKeys> = {
  *
  * So: if the client carries an in-progress attempt and no signed-in session,
  * the client is destroyed — clerk-js mints a fresh one lazily — and only then
- * is the widget mounted. Destroying is safe precisely because this modal only
- * exists for anonymous visitors: there is no session to lose by definition,
- * and the guard below refuses to run when one exists anyway.
+ * is the widget mounted. This runs exactly once, at the moment the widget is
+ * about to appear — never from a reactive effect that could fire mid-handshake.
  */
 function useFreshSignInAttempt(): boolean {
   const clerk = useClerk();
@@ -72,9 +56,29 @@ function useFreshSignInAttempt(): boolean {
     if (!clerk.loaded) {
       return;
     }
-    const staleAttempt =
-      isSignedIn !== true &&
-      (clerk.client?.signIn?.status != null || clerk.client?.signUp?.status != null);
+    /**
+     * A *completed* attempt is not a stale one, and destroying the client
+     * throws its sessions away with it.
+     *
+     * `isSignedIn` is false for a moment after an OAuth popup returns, while
+     * clerk-js resolves the new session — and in that same moment `signUp` or
+     * `signIn` is sitting at `complete`. The first version of this guard read
+     * that pair as "an abandoned attempt and nobody signed in" and destroyed
+     * the client, discarding a sign-in that had just succeeded. That is a
+     * sign-in that has to be performed two or three times before one of them
+     * happens to survive the race (reported 2026-08-07).
+     *
+     * So: only an attempt that is both unfinished and unaccompanied by any
+     * session counts as stale.
+     */
+    const signInStatus = clerk.client?.signIn?.status ?? null;
+    const signUpStatus = clerk.client?.signUp?.status ?? null;
+    const attemptInProgress =
+      (signInStatus != null && signInStatus !== 'complete') ||
+      (signUpStatus != null && signUpStatus !== 'complete');
+    const hasSession = clerk.session != null || (clerk.client?.activeSessions?.length ?? 0) > 0;
+
+    const staleAttempt = attemptInProgress && !hasSession && isSignedIn !== true;
     if (!staleAttempt) {
       setReady(true);
       return;
@@ -96,108 +100,51 @@ function useFreshSignInAttempt(): boolean {
   return ready;
 }
 
-function ClerkHandoff({
-  onSignedIn,
-  onFailed,
-  onBusy,
-}: {
-  onSignedIn?: () => void;
-  onFailed: (reason: string) => void;
-  onBusy: (busy: boolean) => void;
-}) {
-  const { isSignedIn, getToken } = useAuth();
-  const { establishSession } = useAuthContext();
-  const [state, setState] = useState<HandoffState>('idle');
-
-  useEffect(() => {
-    if (!isSignedIn || state !== 'idle') {
-      return;
-    }
-
-    let cancelled = false;
-    setState('exchanging');
-    onBusy(true);
-
-    const run = async () => {
-      try {
-        const token = await getToken();
-        if (!token) {
-          throw new Error('no_token');
-        }
-        const session = (await request.post(exchangeUrl(), {
-          token,
-        })) as TRefreshTokenResponse;
-        if (cancelled) {
-          return;
-        }
-        /**
-         * The exchange hands back the session it just created, so this adopts
-         * it directly. It used to call `establishSession()` empty, which went
-         * back to the server to redeem the refresh cookie — and a browser that
-         * declined to return that cookie left a fully successful sign-in with
-         * no session in the page at all.
-         */
-        if (!(await establishSession(session))) {
-          throw new Error('session_not_established');
-        }
-        if (cancelled) {
-          return;
-        }
-        onSignedIn?.();
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-        const code =
-          (error as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-          'exchange_failed';
-        setState('failed');
-        onBusy(false);
-        onFailed(code);
-      }
-    };
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [isSignedIn, state, getToken, establishSession, onSignedIn, onFailed, onBusy]);
-
-  return null;
-}
-
-export default function ClerkSignIn({
-  publishableKey,
-  onSignedIn,
-}: {
-  publishableKey: string;
-  onSignedIn?: () => void;
-}) {
+/**
+ * The widget plus the bridge's reported state, shared by the login modal and
+ * the `/login` page. The bridge itself is *not* mounted here — the caller
+ * decides where the orchestration lives (the anonymous shell for the modal,
+ * this route's own provider for `/login`).
+ */
+export function SignInPanel({ bridge }: { bridge: ClerkBridgeState }) {
   const localize = useLocalize();
   const navigate = useNavigate();
-  const [failure, setFailure] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
+  const busy = bridge.status === 'exchanging';
+  const failure = bridge.status === 'failed' ? bridge.failure : null;
   const message = localize((failure && FAILURE_KEYS[failure]) || 'com_aflat_auth_exchange_failed');
 
   return (
-    /* Clerk ships its own copy; without this the first screen a user sees is English. */
-    <ClerkProvider publishableKey={publishableKey} localization={roRO}>
-      <ClerkHandoff onSignedIn={onSignedIn} onFailed={setFailure} onBusy={setBusy} />
-
+    <>
       {failure != null && (
         <div
           role="alert"
           className="mb-4 rounded-xl border border-border-light bg-surface-secondary px-4 py-3 text-sm text-text-primary"
         >
           <p>{message}</p>
-          <button
-            type="button"
-            onClick={() => navigate('/login/redirect')}
-            className="mt-2 text-sm font-medium text-[var(--panza-link)] underline"
-          >
-            {localize('com_aflat_auth_use_fallback')}
-          </button>
+          {/**
+           * Two ways forward, because the modal this renders in cannot be
+           * dismissed: retry re-runs the exchange for the session Clerk
+           * already holds (the common transient failure), and the fallback is
+           * the full-page OIDC door for when the embedded path itself is what
+           * is broken.
+           */}
+          <div className="mt-2 flex items-center gap-4">
+            <button
+              type="button"
+              onClick={bridge.retry}
+              className="text-sm font-medium text-[var(--panza-link)] underline"
+            >
+              {localize('com_aflat_auth_retry')}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/login/redirect')}
+              className="text-sm font-medium text-[var(--panza-link)] underline"
+            >
+              {localize('com_aflat_auth_use_fallback')}
+            </button>
+          </div>
         </div>
       )}
 
@@ -219,12 +166,12 @@ export default function ClerkSignIn({
       {/**
        * The gap between „Clerk says you are signed in" and „the app says so too".
        *
-       * It is a token exchange plus a refresh round trip, and until now it drew
-       * nothing at all: Clerk's own widget is finished and stops showing its
-       * spinner, so the modal simply sat there — the same silence as a dead
-       * button, at the one moment the user has just handed over a password.
-       * Absolutely positioned over the widget rather than replacing it, so the
-       * box does not change height on the way out.
+       * It is a token exchange, and until now it drew nothing at all: Clerk's
+       * own widget is finished and stops showing its spinner, so the modal
+       * simply sat there — the same silence as a dead button, at the one
+       * moment the user has just handed over a password. Absolutely positioned
+       * over the widget rather than replacing it, so the box does not change
+       * height on the way out.
        */}
       <div className="relative">
         {busy && (
@@ -241,8 +188,45 @@ export default function ClerkSignIn({
         )}
         <FreshWidget />
       </div>
+    </>
+  );
+}
+
+/**
+ * `/login`'s embedded sign-in: this route sits outside the anonymous shell, so
+ * it mounts its own Clerk provider and its own bridge. `onSignedIn` navigates —
+ * unlike the modal, this page is a destination of its own and has to name the
+ * next one.
+ */
+export default function ClerkSignIn({
+  publishableKey,
+  onSignedIn,
+}: {
+  publishableKey: string;
+  onSignedIn?: () => void;
+}) {
+  const navigate = useNavigate();
+  return (
+    /* Clerk ships its own copy; without this the first screen a user sees is English. */
+    <ClerkProvider
+      publishableKey={publishableKey}
+      localization={roRO}
+      /**
+       * SPA navigation for clerk-js, or completing an email code ends in a
+       * `window.location` assignment — a full reload at the moment of success.
+       * Same wiring, same reason as `AnonClerkProvider` (see `ClerkBridge.tsx`).
+       */
+      routerPush={(to: string) => navigate(to)}
+      routerReplace={(to: string) => navigate(to, { replace: true })}
+    >
+      <BridgedPanel onSignedIn={onSignedIn} />
     </ClerkProvider>
   );
+}
+
+function BridgedPanel({ onSignedIn }: { onSignedIn?: () => void }) {
+  const bridge = useClerkBridge(onSignedIn);
+  return <SignInPanel bridge={bridge} />;
 }
 
 /**
@@ -296,8 +280,9 @@ function FreshWidget() {
        * own account portal (`accounts.ai-aflat.ro`, measured on mobile
        * 2026-08-06). Without these the return leg is the portal's configured
        * landing page, i.e. off our app entirely; with them the user comes back
-       * to the chat route, where the parked question is picked up from
-       * localStorage exactly as it is after the popup flow.
+       * to the chat route, where the shell-level bridge (`ClerkBridge.tsx`)
+       * exchanges the session on boot and the parked question is picked up
+       * from localStorage exactly as it is after the popup flow.
        */
       fallbackRedirectUrl="/c/new"
       signUpFallbackRedirectUrl="/c/new"

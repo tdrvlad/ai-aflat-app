@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { setAnonAuthSurface } from 'librechat-data-provider';
 import { SendIcon, TextareaAutosize } from '@librechat/client';
 import { BrandMark } from '~/components/Brand';
+import { startAuthAttempt } from './Auth/authTrace';
 import LoginModal from './Auth/LoginModal';
 import StarterChips from './StarterChips';
 import { saveStash } from './anonStash';
@@ -54,7 +55,7 @@ type GateState = 'idle' | 'asking' | 'gate';
  * modal is a reaction to the *question*: the assistant took it, then needed to
  * know who is asking.
  */
-export default function AnonChat({ onSignedIn }: { onSignedIn: () => void }) {
+export default function AnonChat() {
   const localize = useLocalize();
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -119,6 +120,7 @@ export default function AnonChat({ onSignedIn }: { onSignedIn: () => void }) {
       if (pickPendingRef.current) {
         return;
       }
+      startAuthAttempt();
       saveStash({ text: question });
       setSentText(question);
       setText('');
@@ -135,15 +137,6 @@ export default function AnonChat({ onSignedIn }: { onSignedIn: () => void }) {
     },
     [text, startSend],
   );
-
-  /**
-   * Backing out of the login modal returns to the thread with the question
-   * still in it — not to a fresh empty chat. It stays in this browser and is
-   * offered back on the next visit.
-   */
-  const handleDismissLogin = useCallback(() => {
-    setState('idle');
-  }, []);
 
   /**
    * An example question sends on tap.
@@ -274,12 +267,14 @@ export default function AnonChat({ onSignedIn }: { onSignedIn: () => void }) {
       )}
 
       {/**
-       * Step one of two. Step two — the framing and data acknowledgement — is
-       * `ConsentModal`, which the authenticated shell raises the moment this
-       * modal hands back a session, and only for an account that has never
-       * recorded one. A returning user sees this and nothing else.
+       * Step one of two, and it does not close until it is done — signing in is
+       * the only way forward once the question is parked (ruled 2026-08-07).
+       * Step two — the framing and data acknowledgement — is `ConsentModal`,
+       * which the authenticated shell raises the moment the shell-level bridge
+       * hands back a session, and only for an account that has never recorded
+       * one. A returning user sees this and nothing else.
        */}
-      <LoginModal open={state === 'gate'} onSignedIn={onSignedIn} onDismiss={handleDismissLogin} />
+      <LoginModal open={state === 'gate'} />
 
       {/* The composer's row, and the anchor the empty layout centres on. */}
       <div

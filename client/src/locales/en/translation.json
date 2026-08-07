@@ -16,6 +16,7 @@
   "com_aflat_auth_domain_blocked": "Your account does not have access to the app yet.",
   "com_aflat_auth_email_missing": "We could not read your email address from the sign-in. Please try another method or contact us.",
   "com_aflat_auth_exchange_failed": "We could not complete sign-in. Please try again.",
+  "com_aflat_auth_retry": "Try again",
   "com_aflat_auth_signing_in": "Signing you in…",
   "com_aflat_auth_use_fallback": "Try the other sign-in method",
   "com_aflat_chat_placeholder": "Write your question about legislation",
