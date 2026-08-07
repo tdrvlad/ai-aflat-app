@@ -642,6 +642,25 @@ const setCloudFrontAuthCookies = (req, res, user, options = {}) => {
 };
 
 /**
+ * `SameSite` for every session cookie this file issues.
+ *
+ * Upstream ships `strict`, which assumes a sign-in that never leaves the site.
+ * Ours always does: the user goes to Clerk and on to Google and comes back, so
+ * the requests that follow are attributed to a cross-site initiator and the
+ * browser withholds a `strict` cookie. Measured in production 2026-08-07 — the
+ * server emitted `refreshToken(len=236) [... Secure SameSite=Strict]` and the
+ * request one second later, same origin, carried only Clerk's own cookies and
+ * neither of ours. Every sign-in reached `setAuthTokens`, every one of them
+ * came back anonymous, and the app looped.
+ *
+ * `lax` is what the OAuth CSRF cookies in `packages/api/src/oauth/csrf.ts`
+ * already use, and it still refuses to travel on a cross-site POST — which is
+ * the CSRF case that matters. The session JWT rides in the Authorization
+ * header, not in a cookie, so nothing here depends on `strict`.
+ */
+const SESSION_COOKIE_SAME_SITE = 'lax';
+
+/**
  * Set Auth Tokens
  * @param {String | ObjectId} userId
  * @param {ServerResponse} res
@@ -674,13 +693,13 @@ const setAuthTokens = async (userId, res, _session = null, req = null) => {
       expires: new Date(refreshTokenExpires),
       httpOnly: true,
       secure: shouldUseSecureCookie(),
-      sameSite: 'strict',
+      sameSite: SESSION_COOKIE_SAME_SITE,
     });
     res.cookie('token_provider', 'librechat', {
       expires: new Date(refreshTokenExpires),
       httpOnly: true,
       secure: shouldUseSecureCookie(),
-      sameSite: 'strict',
+      sameSite: SESSION_COOKIE_SAME_SITE,
     });
 
     setCloudFrontAuthCookies(req, res, user, { userId: user?._id ?? userId });
@@ -786,7 +805,7 @@ const setOpenIDAuthTokens = (
       expires: expirationDate,
       httpOnly: true,
       secure: shouldUseSecureCookie(),
-      sameSite: 'strict',
+      sameSite: SESSION_COOKIE_SAME_SITE,
     });
 
     /** Store tokens server-side in session to avoid large cookies */
@@ -804,14 +823,14 @@ const setOpenIDAuthTokens = (
         expires: expirationDate,
         httpOnly: true,
         secure: shouldUseSecureCookie(),
-        sameSite: 'strict',
+        sameSite: SESSION_COOKIE_SAME_SITE,
       });
       if (tokenset.id_token) {
         res.cookie('openid_id_token', tokenset.id_token, {
           expires: expirationDate,
           httpOnly: true,
           secure: shouldUseSecureCookie(),
-          sameSite: 'strict',
+          sameSite: SESSION_COOKIE_SAME_SITE,
         });
       }
     }
@@ -821,7 +840,7 @@ const setOpenIDAuthTokens = (
       expires: expirationDate,
       httpOnly: true,
       secure: shouldUseSecureCookie(),
-      sameSite: 'strict',
+      sameSite: SESSION_COOKIE_SAME_SITE,
     });
     if (userId && isEnabled(process.env.OPENID_REUSE_TOKENS)) {
       /** JWT-signed user ID cookie for image path validation when OPENID_REUSE_TOKENS is enabled */
@@ -832,7 +851,7 @@ const setOpenIDAuthTokens = (
         expires: expirationDate,
         httpOnly: true,
         secure: shouldUseSecureCookie(),
-        sameSite: 'strict',
+        sameSite: SESSION_COOKIE_SAME_SITE,
       });
     }
 

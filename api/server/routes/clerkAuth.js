@@ -136,6 +136,23 @@ router.post('/clerk', async (req, res) => {
     /* Sets the refresh cookie; the client's existing silent refresh takes over. */
     await setAuthTokens(user._id, res, null, req);
 
+    /**
+     * TEMPORARY (2026-08-06) — the exchange returns 200 in production and the
+     * very next request still arrives without a refreshToken cookie. Names and
+     * attributes only; the token value is never logged.
+     */
+    const emitted = res.getHeader('set-cookie');
+    const describe = (c) => {
+      const [pair, ...attrs] = String(c).split(';');
+      const name = pair.split('=')[0];
+      return `${name}(len=${pair.length}) [${attrs.map((a) => a.trim()).join(' ')}]`;
+    };
+    logger.info(
+      `[auth/clerk] emitted set-cookie: ${
+        emitted ? (Array.isArray(emitted) ? emitted : [emitted]).map(describe).join(' || ') : 'NONE'
+      }`,
+    );
+
     return res.json({ ok: true });
   } catch (error) {
     logger.error('[auth/clerk] Exchange failed', error);

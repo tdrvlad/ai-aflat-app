@@ -103,6 +103,9 @@ const refreshController = async (req, res) => {
   const parsedCookies = req.headers.cookie ? cookies.parse(req.headers.cookie) : {};
   const token_provider = parsedCookies.token_provider;
 
+  /** TEMPORARY (2026-08-06) — names only, to see which cookies the browser sends back. */
+  logger.info(`[refreshController] cookies received: ${Object.keys(parsedCookies).join(',') || 'NONE'}`);
+
   if (token_provider === 'openid' && isEnabled(process.env.OPENID_REUSE_TOKENS)) {
     /** For OpenID users, read refresh token from session to avoid large cookie issues */
     const refreshToken = req.session?.openidTokens?.refreshToken || parsedCookies.refreshToken;
