@@ -588,14 +588,27 @@ export type TAflatSource = {
   act_id?: number;
   /** Parent act title, e.g. "CODUL MUNCII din 24 ianuarie 2003 ( Legea nr. 53/2003 )" */
   act_title?: string;
+  /**
+   * The act's identity with the subject tail cut off, e.g. "Legea nr. 53/2003".
+   * What the synthesis prompt names the source by, so an amending act's line
+   * cannot end in the words of the act it amends.
+   */
+  act_short?: string;
   /** The PROVISION label, not the act, e.g. "art. 78–81" */
   title?: string;
   article_first?: string;
   article_last?: string;
+  /**
+   * THE CITATION OF RECORD, together with `act_id` — never `(id, raw anchor)`.
+   *
+   * Anchor ids are per-render DOM counters, so the same article gets a different
+   * one in a different consolidation; the label is what survives. The UI needs it
+   * to satisfy the standing rule that an unresolvable or ambiguous anchor links
+   * act-level and prints the label as plain text.
+   */
+  article_label?: string;
   /** Structural breadcrumb inside the act, e.g. "Titlul II › Capitolul V" */
   path?: string;
-  /** The in-document anchor retrieval returned, e.g. "id_artA620" — never built here */
-  anchor?: string;
   /** Relevant excerpt, plain text */
   snippet?: string;
   /** Provenance line: why retrieval surfaced this, e.g. "… — matched: concedier, preaviz" */
@@ -620,6 +633,13 @@ export type TAflatSource = {
   degraded?: string;
   /** True = this provision amends another act rather than being that act */
   likely_amending?: boolean;
+  /**
+   * What this act amends, as a labelled RELATION — never as this source's own
+   * identity. Present only when `likely_amending`.
+   */
+  amends?: string;
+  /** Ready-made attribution line, so an amending act is never quoted as the act it amends. */
+  cite_as?: string;
   /** True = the answer actually leaned on this source. Absent = treat as cited. */
   cited?: boolean;
 };

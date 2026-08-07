@@ -34,30 +34,76 @@ export const AFLAT_SOURCES_TIMEOUT_MS = 5000;
 
 /**
  * The allowlist IS the boundary: a key absent from these tables never crosses,
- * whatever the orchestrator sends. Keep them in step with `TAflatSource` /
- * `TAflatSourceAct` — a field added there but not here is silently dropped, which
- * is exactly the failure this seam was widened to fix.
+ * whatever the orchestrator sends.
+ *
+ * "Keep them in step with `TAflatSource`" used to be a comment asking a human to
+ * remember, and the human did not: measured 2026-08-07, the orchestrator emitted
+ * `act_short`, `article_label`, `cite_as` and `amends` and every one of them was
+ * silently dropped here — including `article_label`, which is half the citation of
+ * record. In the other direction this list declared `anchor`, which the
+ * orchestrator has never sent (it sends `retrieved_anchor`, deliberately named so
+ * that building a link from it reads as the mistake it is) and nothing ever read.
+ *
+ * So the comment is now a compile error instead — see ALL_SOURCE_FIELDS below.
+ *
+ * `retrieved_anchor` and `anchor_resolution` stay off this list ON PURPOSE. They
+ * are diagnostics: an anchor is only valid against the exact blob it was rendered
+ * from, so nothing downstream may compose a URL out of one. `viewer_url` arrives
+ * already resolved, or stays act-level.
  */
 const SOURCE_STRING_FIELDS = [
   'ref',
   'entity_id',
   'entity_type',
   'act_title',
+  'act_short',
   'title',
   'article_first',
   'article_last',
+  'article_label',
   'path',
-  'anchor',
   'snippet',
   'why',
   'legdb_status',
   'band',
   'degraded',
+  'amends',
+  'cite_as',
 ] as const;
 
 const SOURCE_NUMBER_FIELDS = ['act_id', 'rank'] as const;
 const SOURCE_BOOLEAN_FIELDS = ['in_force', 'likely_amending', 'cited'] as const;
 const SOURCE_URL_FIELDS = ['url', 'viewer_url'] as const;
+
+/**
+ * The drift guard. Every key of `TAflatSource` must appear in exactly one of the
+ * four tables above; adding a field to the shared type without deciding how it
+ * crosses is now a build failure rather than a citation that quietly loses half
+ * its identity somewhere between two repositories.
+ *
+ * `Exclude` in both directions, because both are real failures: a type key with
+ * no table drops silently, and a table key with no type is a field we validate
+ * and then hand to a renderer that has never heard of it.
+ */
+type AllSourceFields =
+  | (typeof SOURCE_STRING_FIELDS)[number]
+  | (typeof SOURCE_NUMBER_FIELDS)[number]
+  | (typeof SOURCE_BOOLEAN_FIELDS)[number]
+  | (typeof SOURCE_URL_FIELDS)[number];
+
+/**
+ * `AssertNever<T>` fails to compile unless `T` is `never`, and the compiler names
+ * the offending field in the error. It must be this shape rather than a
+ * `const x: [A, B] = [null as never, null as never]` — `never` is assignable to
+ * every type, so that form type-checks no matter what and guards nothing. It was
+ * written that way first and verified to catch nothing.
+ */
+type AssertNever<T extends never> = T;
+
+/** A field on `TAflatSource` that no table carries: it would be silently dropped. */
+type _NoTableForTypeField = AssertNever<Exclude<keyof TAflatSource, AllSourceFields>>;
+/** A field in a table that the type does not declare: validated, then unrenderable. */
+type _NoTypeForTableField = AssertNever<Exclude<AllSourceFields, keyof TAflatSource>>;
 
 const ACT_STRING_FIELDS = ['act_title', 'legdb_status', 'band'] as const;
 const ACT_NUMBER_FIELDS = ['act_id'] as const;

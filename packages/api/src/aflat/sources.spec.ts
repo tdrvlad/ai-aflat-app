@@ -89,7 +89,7 @@ const measuredSource: TAflatSource = {
   article_first: '78',
   article_last: '81',
   path: 'Titlul II › Capitolul V',
-  anchor: 'id_artA620',
+  article_label: '78',
   snippet: 'Articolul 78 Concedierea dispusă cu nerespectarea procedurii…',
   why: 'Codul muncii › Titlul II › Capitolul V — matched: termen, preaviz, concedier',
   url: 'https://legislatie.just.ro/Public/DetaliiDocument/41627',
@@ -346,17 +346,72 @@ describe('fetchAflatSources', () => {
     expect(sources[0].url).toBe(measuredSource.url);
   });
 
-  it('drops an anchor that is not a string rather than inventing one', async () => {
-    orchestrator.json({ sources: [{ ...measuredSource, anchor: 620, act_id: '41627' }] });
+  it('drops an article label that is not a string rather than inventing one', async () => {
+    orchestrator.json({ sources: [{ ...measuredSource, article_label: 620, act_id: '41627' }] });
 
     const { sources } = await fetchAflatSources({
       baseURL: orchestrator.baseURL,
       apiKey: 'test-key',
-      responseMessageId: 'msg-anchor',
+      responseMessageId: 'msg-label',
     });
 
-    expect(sources[0].anchor).toBeUndefined();
+    expect(sources[0].article_label).toBeUndefined();
     expect(sources[0].act_id).toBeUndefined();
+  });
+
+  /**
+   * The four fields the orchestrator emits that this boundary silently dropped
+   * until 2026-08-07. `article_label` is the one that matters most: with `act_id`
+   * it IS the citation of record, and the rule that an unresolvable anchor links
+   * act-level and prints the label as text cannot be honoured without it.
+   */
+  it('carries act_short, article_label, amends and cite_as across the boundary', async () => {
+    orchestrator.json({
+      sources: [
+        {
+          ...measuredSource,
+          act_short: 'Legea nr. 53/2003',
+          article_label: 'ART. 78',
+          amends: 'Legea nr. 53/2003 - Codul muncii',
+          cite_as: 'Legea nr. 53/2003, art. 78',
+        },
+      ],
+    });
+
+    const { sources } = await fetchAflatSources({
+      baseURL: orchestrator.baseURL,
+      apiKey: 'test-key',
+      responseMessageId: 'msg-contract',
+    });
+
+    expect(sources[0]).toMatchObject({
+      act_short: 'Legea nr. 53/2003',
+      article_label: 'ART. 78',
+      amends: 'Legea nr. 53/2003 - Codul muncii',
+      cite_as: 'Legea nr. 53/2003, art. 78',
+    });
+  });
+
+  /**
+   * The other half of the boundary, and the reason it is not simply a spread:
+   * an anchor is only valid against the exact blob it was rendered from, so it
+   * must never reach anything that could compose a URL out of it.
+   */
+  it('never carries retrieved_anchor or anchor_resolution — they are diagnostics, not links', async () => {
+    orchestrator.json({
+      sources: [
+        { ...measuredSource, retrieved_anchor: 'id_artA620', anchor_resolution: 'matched' },
+      ],
+    });
+
+    const { sources } = await fetchAflatSources({
+      baseURL: orchestrator.baseURL,
+      apiKey: 'test-key',
+      responseMessageId: 'msg-diagnostics',
+    });
+
+    expect(sources[0]).not.toHaveProperty('retrieved_anchor');
+    expect(sources[0]).not.toHaveProperty('anchor_resolution');
   });
 
   it('returns an empty list when the payload has no sources array', async () => {

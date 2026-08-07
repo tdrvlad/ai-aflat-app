@@ -34,7 +34,7 @@ const PROVISION_A: TAflatSource = {
   article_first: '78',
   article_last: '81',
   path: 'Titlul II › Capitolul V',
-  anchor: 'id_artA620',
+  article_label: '78',
   snippet:
     'Concedierea dispusă cu nerespectarea procedurii prevăzute de lege este lovită de nulitate.',
   why: 'Codul muncii › Titlul II › Capitolul V — matched: concedier, preaviz',
@@ -54,7 +54,7 @@ const PROVISION_B: TAflatSource = {
   title: 'art. 73–77',
   article_first: '73',
   article_last: '77',
-  anchor: 'id_artA588',
+  article_label: '73',
   snippet:
     'În perioada prevăzută la art. 72 alin. (1), agenția teritorială trebuie să caute soluții.',
   viewer_url: 'https://legislatie.ai-aflat.ro/viewer/41627?a=id_artA588',
@@ -105,7 +105,7 @@ const AMENDING_ACT: TAflatSourceAct = {
       ref: 'S5',
       entity_id: '77268:id_parA10',
       act_id: 77268,
-      anchor: 'id_parA10',
+      article_label: '10',
       snippet: 'Text al ordonanței de modificare.',
       url: 'https://legislatie.just.ro/Public/DetaliiDocument/77268',
       viewer_url: 'https://legislatie.ai-aflat.ro/viewer/77268?a=id_parA10',
