@@ -395,7 +395,6 @@ if (cluster.isMaster) {
     app.use('/oauth', routes.oauth);
     app.use('/api/auth', routes.auth);
     app.use('/api/admin', routes.adminAuth);
-    app.use('/api/admin/skills', routes.adminSkills);
     app.use('/api/actions', routes.actions);
     app.use('/api/keys', routes.keys);
     app.use('/api/api-keys', routes.apiKeys);
@@ -404,9 +403,6 @@ if (cluster.isMaster) {
     app.use('/api/messages', routes.messages);
     app.use('/api/convos', routes.convos);
     app.use('/api/presets', routes.presets);
-    app.use('/api/projects', routes.projects);
-    app.use('/api/prompts', routes.prompts);
-    app.use('/api/skills', routes.skills);
     app.use('/api/categories', routes.categories);
     app.use('/api/endpoints', routes.endpoints);
     app.use('/api/balance', routes.balance);

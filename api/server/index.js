@@ -261,7 +261,6 @@ const startServer = async () => {
   app.use('/api/admin/grants', routes.adminGrants);
   app.use('/api/admin/groups', routes.adminGroups);
   app.use('/api/admin/roles', routes.adminRoles);
-  app.use('/api/admin/skills', routes.adminSkills);
   app.use('/api/admin/users', routes.adminUsers);
   app.use('/api/admin/audit-log', routes.adminAuditLog);
   app.use('/api/actions', routes.actions);
@@ -272,9 +271,6 @@ const startServer = async () => {
   app.use('/api/messages', routes.messages);
   app.use('/api/convos', routes.convos);
   app.use('/api/presets', routes.presets);
-  app.use('/api/projects', routes.projects);
-  app.use('/api/prompts', routes.prompts);
-  app.use('/api/skills', routes.skills);
   app.use('/api/categories', routes.categories);
   app.use('/api/endpoints', routes.endpoints);
   app.use('/api/balance', routes.balance);
