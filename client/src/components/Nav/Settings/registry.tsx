@@ -21,7 +21,6 @@ import ImportConversations from '../SettingsTabs/Data/ImportConversations';
 import { toggleControl, ThemeSetting, LangSetting } from './controls';
 import { EngineSTTSetting, EngineTTSSetting } from './SpeechControls';
 import FontSizeSelector from '../SettingsTabs/Chat/FontSizeSelector';
-import AdvancedPrompts from '../SettingsTabs/Chat/AdvancedPrompts';
 import DeleteAccount from '../SettingsTabs/Account/DeleteAccount';
 import { ForkSettings } from '../SettingsTabs/Chat/ForkSettings';
 import ChatDirection from '../SettingsTabs/Chat/ChatDirection';
@@ -184,18 +183,6 @@ export const registry: SettingEntry[] = [
       switchId: 'plusCommand',
     }),
   },
-  {
-    id: 'slashCommand',
-    tab: CHAT,
-    section: 'commands',
-    labelKey: 'com_nav_slash_command_description',
-    show: (ctx) => ctx.hasPrompts,
-    Component: toggleControl({
-      stateAtom: store.slashCommand,
-      localizationKey: 'com_nav_slash_command_description',
-      switchId: 'slashCommand',
-    }),
-  },
   // Chat · Messages
   {
     id: 'enableUserMsgMarkdown',
@@ -303,38 +290,6 @@ export const registry: SettingEntry[] = [
     labelKey: 'com_ui_fork_default',
     keywords: ['fork', 'branch', 'split'],
     Component: ForkSettings,
-  },
-  // Chat · Prompts
-  {
-    id: 'advancedPrompts',
-    tab: CHAT,
-    section: 'prompts',
-    labelKey: 'com_nav_advanced_prompts',
-    keywords: ['prompt'],
-    Component: AdvancedPrompts,
-  },
-  {
-    id: 'alwaysMakeProd',
-    tab: CHAT,
-    section: 'prompts',
-    labelKey: 'com_nav_always_make_prod',
-    Component: toggleControl({
-      stateAtom: store.alwaysMakeProd,
-      localizationKey: 'com_nav_always_make_prod',
-      switchId: 'alwaysMakeProd',
-    }),
-  },
-  {
-    id: 'autoSendPrompts',
-    tab: CHAT,
-    section: 'prompts',
-    labelKey: 'com_nav_auto_send_prompts',
-    Component: toggleControl({
-      stateAtom: store.autoSendPrompts,
-      localizationKey: 'com_nav_auto_send_prompts',
-      switchId: 'autoSendPrompts',
-      hoverCardText: 'com_nav_auto_send_prompts_desc',
-    }),
   },
 
   // Speech · Speech-to-text

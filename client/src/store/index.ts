@@ -4,7 +4,6 @@ import isTemporary from './temporary';
 import endpoints from './endpoints';
 import families from './families';
 import settings from './settings';
-import prompts from './prompts';
 import search from './search';
 import preset from './preset';
 import lang from './language';
@@ -27,7 +26,6 @@ export default {
   ...toast,
   ...submission,
   ...search,
-  ...prompts,
   ...preset,
   ...lang,
   ...settings,

@@ -21,7 +21,6 @@ export type SectionId =
   | 'commands'
   | 'messages'
   | 'conversations'
-  | 'prompts'
   | 'stt'
   | 'tts'
   | 'memory'
@@ -90,7 +89,6 @@ export const TABS: TabMeta[] = [
       { id: 'commands', labelKey: 'com_ui_settings_section_commands' },
       { id: 'messages', labelKey: 'com_ui_settings_section_messages' },
       { id: 'conversations', labelKey: 'com_ui_settings_section_conversations' },
-      { id: 'prompts', labelKey: 'com_ui_settings_section_prompts' },
     ],
   },
   {

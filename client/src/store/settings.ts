@@ -49,8 +49,6 @@ const localStorageAtoms = {
   // Commands settings
   atCommand: atomWithLocalStorage('atCommand', true),
   plusCommand: atomWithLocalStorage('plusCommand', true),
-  slashCommand: atomWithLocalStorage('slashCommand', true),
-  dollarCommand: atomWithLocalStorage('dollarCommand', true),
 
   // Speech settings
   conversationMode: atomWithLocalStorage('conversationMode', false),

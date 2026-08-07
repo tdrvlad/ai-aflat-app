@@ -1,13 +1,6 @@
 import { useMemo } from 'react';
 import { AttachmentIcon } from '@librechat/client';
-import {
-  Brain,
-  Bookmark,
-  NotebookPen,
-  ScrollText,
-  ArrowRightToLine,
-  SlidersHorizontal,
-} from 'lucide-react';
+import { Brain, Bookmark, ArrowRightToLine, SlidersHorizontal } from 'lucide-react';
 import {
   Permissions,
   EModelEndpoint,
@@ -15,9 +8,9 @@ import {
   isParamEndpoint,
   isAgentsEndpoint,
 } from 'librechat-data-provider';
-import type { TInterfaceConfig, TEndpointsConfig } from 'librechat-data-provider';
+import type { TInterfaceConfig } from 'librechat-data-provider';
 import type { NavLink } from '~/common';
-import { useAgentCapabilities, useGetAgentsConfig, useHasAccess } from '~/hooks';
+import { useHasAccess } from '~/hooks';
 import BookmarkPanel from '~/components/SidePanel/Bookmarks/BookmarkPanel';
 import Parameters from '~/components/SidePanel/Parameters/Panel';
 import { MemoryPanel } from '~/components/SidePanel/Memories';
@@ -29,7 +22,6 @@ export default function useSideNavLinks({
   endpoint,
   endpointType,
   interfaceConfig,
-  endpointsConfig,
   includeHidePanel = true,
 }: {
   hidePanel?: () => void;
@@ -37,7 +29,6 @@ export default function useSideNavLinks({
   endpoint?: EModelEndpoint | null;
   endpointType?: EModelEndpoint | null;
   interfaceConfig: Partial<TInterfaceConfig>;
-  endpointsConfig: TEndpointsConfig;
   includeHidePanel?: boolean;
 }) {
   const hasAccessToBookmarks = useHasAccess({
