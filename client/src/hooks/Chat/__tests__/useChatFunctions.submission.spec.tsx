@@ -39,10 +39,9 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 /**
- * Recoil is replaced rather than wrapped in a RecoilRoot so the two `drain`
- * callbacks — manual skills and quoted excerpts — can be driven directly. Both
- * resolve to empty here, which is the state of every real submit since the
- * Skills feature was removed: nothing fills those queues any more.
+ * Recoil is replaced rather than wrapped in a RecoilRoot so the quoted-excerpt
+ * `drain` callback can be driven directly. It resolves to empty here, which is
+ * the state of a submit with nothing selected.
  */
 const mockReset = jest.fn();
 let mockPendingByAtom: Record<string, string[]> = {};
@@ -214,12 +213,27 @@ describe('ask() — what actually goes on the wire', () => {
   });
 
   /**
-   * Empty means ABSENT, not `[]`. The backend distinguishes the two, and this is
-   * the property that makes the leftover `manualSkills` plumbing inert: with the
-   * Skills feature gone nothing fills the queue, so the field is omitted from
-   * every real submit.
+   * Empty means ABSENT, not `[]` — the backend distinguishes the two, so a
+   * quote-less turn must omit the field rather than send an empty array.
    */
-  it('omits manualSkills and quotes entirely when nothing is queued', () => {
+  it('omits quotes entirely when nothing is queued', () => {
+    const { ask, setSubmission } = setup();
+
+    act(() => {
+      ask({ text: 'o întrebare' });
+    });
+
+    expect(submissionFrom(setSubmission).userMessage.quotes).toBeUndefined();
+  });
+
+  /**
+   * `manualSkills` was removed from the send path on 2026-08-07, after the
+   * Skills feature it belonged to. This is a reintroduction guard, not a
+   * behaviour pin: the field survives on the message schema so pre-removal
+   * history stays readable, which makes it easy to re-add here by reflex when
+   * touching payload construction.
+   */
+  it('never puts manualSkills on the wire', () => {
     const { ask, setSubmission } = setup();
 
     act(() => {
@@ -227,9 +241,9 @@ describe('ask() — what actually goes on the wire', () => {
     });
 
     const submission = submissionFrom(setSubmission);
-    expect(submission.manualSkills).toBeUndefined();
-    expect(submission.userMessage.manualSkills).toBeUndefined();
-    expect(submission.userMessage.quotes).toBeUndefined();
+    expect(submission).not.toHaveProperty('manualSkills');
+    expect(submission.userMessage).not.toHaveProperty('manualSkills');
+    expect(submission.initialResponse).not.toHaveProperty('manualSkills');
   });
 
   /**

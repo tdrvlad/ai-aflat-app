@@ -48,7 +48,6 @@ jest.mock('~/store', () => ({
     isTemporary: 'isTemporary',
     isSubmittingFamily: () => 'isSubmitting',
     showStopButtonByIndex: () => 'showStopButton',
-    pendingManualSkillsByConvoId: () => 'pendingManualSkills',
     messagesSiblingIdxFamily: () => 'messagesSiblingIdx',
   },
   useGetEphemeralAgent: () => mockGetEphemeralAgent,

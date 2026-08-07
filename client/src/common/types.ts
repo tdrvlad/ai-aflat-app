@@ -358,14 +358,6 @@ export type TOptions = {
    */
   targetResponseMessageId?: string | null;
   /**
-   * Carry forward a user message's manually-invoked skills when the caller
-   * is resubmitting / regenerating that same message — the compose-time
-   * atom has already been drained on the original submit, so without this
-   * the second turn would run without any manual priming even though the
-   * pills are still visible on the user bubble.
-   */
-  overrideManualSkills?: string[];
-  /**
    * Carry forward a user message's quoted excerpts when resubmitting /
    * regenerating that same message — the compose-time atom is drained on the
    * original submit, so without this the second turn would lose the quoted

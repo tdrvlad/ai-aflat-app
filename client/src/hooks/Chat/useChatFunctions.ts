@@ -216,34 +216,15 @@ export default function useChatFunctions({
   const focusRegeneratedResponse = useFocusRegeneratedResponse();
 
   /**
-   * Atomically read + reset the per-conversation queue of manually-invoked
-   * skills from the `$` popover. Reading and resetting in a single Recoil
-   * snapshot guarantees that if the user selects more skills between here and
-   * the next submission, their picks are never silently lost into a reset atom.
+   * Atomically read + reset the per-conversation queue of quoted excerpts the
+   * user added via the "Add to chat" selection popup. A single snapshot read +
+   * reset, so excerpts added between here and submission are never lost into a
+   * reset atom.
    *
    * The `hasValue` guard is defensive: this atom has a synchronous default of
    * `[]` so `.contents` is always the resolved value in practice, but reading
    * `.contents` on a loading/errored loadable yields a Promise/Error, which
    * would make the `string[]` cast unsound.
-   */
-  const drainPendingManualSkills = useRecoilCallback(
-    ({ snapshot, reset }) =>
-      (convoId: string): string[] => {
-        const loadable = snapshot.getLoadable(store.pendingManualSkillsByConvoId(convoId));
-        const skills = loadable.state === 'hasValue' ? (loadable.contents as string[]) : [];
-        if (skills.length > 0) {
-          reset(store.pendingManualSkillsByConvoId(convoId));
-        }
-        return skills;
-      },
-    [],
-  );
-
-  /**
-   * Atomically read + reset the per-conversation queue of quoted excerpts the
-   * user added via the "Add to chat" selection popup. Mirrors
-   * `drainPendingManualSkills`: a single snapshot read + reset so excerpts
-   * added between here and submission are never lost into a reset atom.
    */
   const drainPendingQuotes = useRecoilCallback(
     ({ snapshot, reset }) =>
@@ -276,7 +257,6 @@ export default function useChatFunctions({
       overrideMessages,
       overrideFiles,
       targetResponseMessageId,
-      overrideManualSkills,
       overrideQuotes,
       addedConvo,
     } = {},
@@ -317,29 +297,11 @@ export default function useChatFunctions({
 
     const ephemeralAgent = getEphemeralAgent(conversationId ?? Constants.NEW_CONVO);
     /**
-     * Manual skill selection resolution:
-     *  - Explicit `overrideManualSkills` wins (regenerate / save-and-submit
-     *    pass the original user message's persisted `manualSkills` so the
-     *    resubmitted turn primes the same skills — the pills are still
-     *    visible to the user, it would be strange to quietly drop them).
-     *  - Regenerate / continue / edit without an override → empty, and the
-     *    compose-time atom is deliberately NOT drained (those flows replay
-     *    a prior turn, not compose a new one).
-     *  - Fresh submit → drain the per-convo atom into the message.
-     */
-    let manualSkills = overrideManualSkills;
-    if (manualSkills == null) {
-      manualSkills =
-        isRegenerate || isContinued || isEdited
-          ? []
-          : drainPendingManualSkills(conversationId ?? Constants.NEW_CONVO);
-    }
-    /**
-     * Quoted-excerpt resolution mirrors manual skills, but is skipped entirely
-     * for Assistants endpoints: those bypass the `BaseClient` merge, so the
-     * quote UI is hidden there and a selection queued on another endpoint must
-     * not silently ride along on a fresh submit. The pending atom is left
-     * untouched so the queue survives if the user switches back.
+     * Quoted-excerpt resolution is skipped entirely for Assistants endpoints:
+     * those bypass the `BaseClient` merge, so the quote UI is hidden there and
+     * a selection queued on another endpoint must not silently ride along on a
+     * fresh submit. The pending atom is left untouched so the queue survives if
+     * the user switches back.
      *  - Explicit `overrideQuotes` wins (regenerate / resubmit replay the
      *    original user message's persisted quotes so the same context is sent).
      *  - Regenerate / continue / edit without an override → empty (those flows
@@ -466,13 +428,6 @@ export default function useChatFunctions({
       thread_id,
       error: false,
       /**
-       * UI-only metadata. Survives reload because the backend persists the
-       * field on the message schema, and `SkillPills` reads straight
-       * off the message so there's no Recoil state to clean up. Runtime
-       * skill resolution reads the top-level `manualSkills` payload field.
-       */
-      manualSkills: manualSkills.length > 0 ? manualSkills : undefined,
-      /**
        * Quoted excerpts the user referenced this turn. Persisted on the
        * message (backend echoes it back on `req.body.quotes`) so `MessageQuotes`
        * renders the references on the user bubble after reload. The backend
@@ -527,16 +482,6 @@ export default function useChatFunctions({
       model: convo?.model,
       error: false,
       iconURL,
-      /**
-       * Seed the assistant placeholder with the turn's manually-invoked
-       * skill names so `ContentParts` can render interim `SkillCall` cards
-       * from the very first render — no round-trip through the `created`
-       * SSE event required. Rides along with every subsequent spread
-       * (`useStepHandler` response construction, `updateContent` result
-       * spreads) and drops out naturally at `finalHandler` when the
-       * server-backed `responseMessage` replacement takes over.
-       */
-      manualSkills: manualSkills.length > 0 ? manualSkills : undefined,
     };
 
     if (isAssistantsEndpoint(endpoint)) {
@@ -619,7 +564,6 @@ export default function useChatFunctions({
       ephemeralAgent,
       editedContent,
       addedConvo,
-      manualSkills: manualSkills.length > 0 ? manualSkills : undefined,
     };
 
     if (isRegenerate) {
@@ -651,12 +595,6 @@ export default function useChatFunctions({
           isRegenerate: true,
           addedConvo: options?.addedConvo ?? undefined,
           targetResponseMessageId,
-          /** Carry the original user message's manual skill picks forward
-           *  so the regenerated response is primed with the same skills.
-           *  The compose-time atom was drained on the first submit; without
-           *  this the model sees an unprimed turn even though the pills
-           *  still show on the user bubble. */
-          overrideManualSkills: parentMessage.manualSkills,
           /** Carry the original user message's quoted excerpts forward so the
            *  regenerated response is sent the same referenced context. */
           overrideQuotes: parentMessage.quotes,

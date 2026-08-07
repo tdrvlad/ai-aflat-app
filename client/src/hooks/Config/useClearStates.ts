@@ -29,17 +29,15 @@ export default function useClearStates() {
           reset(store.showPopoverFamily(key));
           reset(store.showMentionPopoverFamily(key));
           reset(store.showPlusPopoverFamily(key));
-          reset(store.pendingManualSkillsByConvoId(key.toString()));
           reset(store.pendingQuotesByConvoId(key.toString()));
           /**
-           * Pending skill/quote queues are keyed by the conversation id the
-           * composer wrote under, not this UI index — also clear by the resolved
-           * id so queued-but-unsent selections don't linger in Recoil.
+           * The pending quote queue is keyed by the conversation id the composer
+           * wrote under, not this UI index — also clear by the resolved id so
+           * queued-but-unsent excerpts don't linger in Recoil.
            */
           const convoId = (await snapshot.getPromise(store.conversationByIndex(key)))
             ?.conversationId;
           if (convoId != null) {
-            reset(store.pendingManualSkillsByConvoId(convoId));
             reset(store.pendingQuotesByConvoId(convoId));
           }
           reset(store.globalAudioURLFamily(key));

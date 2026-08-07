@@ -93,9 +93,6 @@ const conversationByIndex = atomFamily<TConversation | null, string | number>({
 
         if (shouldUpdateParams) {
           const newParams = createChatSearchParams(newValue);
-          if (newValue.chatProjectId) {
-            newParams.set('projectId', newValue.chatProjectId);
-          }
           const searchParams = createSearchParams(newParams);
           const url = `${window.location.pathname}?${searchParams.toString()}`;
           window.history.pushState({}, '', url);
@@ -255,20 +252,6 @@ const showMentionPopoverFamily = atomFamily<boolean, string | number | null>({
 const showPlusPopoverFamily = atomFamily<boolean, string | number | null>({
   key: 'showPlusPopoverByIndex',
   default: false,
-});
-
-/**
- * Per-conversation queue of skill names the user invoked manually via the
- * `$` popover for the next submission. Structured channel that the submit
- * pipeline (`useChatFunctions.ask`) drains and pins onto the user message's
- * `manualSkills` field (also echoed at the top of the payload for the
- * runtime resolver), then resets to `[]`. Compose-time chips above the
- * textarea read this atom directly so users see (and can dismiss) their
- * current selection before hitting send.
- */
-const pendingManualSkillsByConvoId = atomFamily<string[], string>({
-  key: 'pendingManualSkillsByConvoId',
-  default: [],
 });
 
 /**
@@ -446,7 +429,6 @@ export default {
   globalAudioFetchingFamily,
   showPlusPopoverFamily,
   useClearSubmissionState,
-  pendingManualSkillsByConvoId,
   pendingQuotesByConvoId,
   updateConversationSelector,
 };
