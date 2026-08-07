@@ -1,6 +1,6 @@
-import { memo, useId, useMemo } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { memo, useCallback, useId, useMemo, useState } from 'react';
 import type { TAflatSource, TAflatSourceAct } from 'librechat-data-provider';
+import ArticleModal from './ArticleModal';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -18,7 +18,7 @@ type ActCardProps = {
 type ProvisionProps = {
   provision: TAflatSource;
   index: number;
-  actHref?: string;
+  actTitle?: string;
   muted?: boolean;
 };
 
@@ -78,19 +78,32 @@ const groupByAct = (sources: TAflatSource[]): TAflatSourceAct[] => {
   return [...groups.values()];
 };
 
+/**
+ * One cited provision: the act's article, and a way into its text.
+ *
+ * Deliberately just the label — no excerpt, no provenance line, no link pair. The
+ * box is a citation, and a citation's job is to say *which* article, legibly, so a
+ * list of ten can be scanned. Everything else — the article's full text as the
+ * reader serves it, the excerpt retrieval matched on, and both ways out to the act
+ * — moved into `ArticleModal`, one click away (Vlad, 2026-08-07). Nothing was
+ * dropped; it stopped being shown all at once.
+ */
 const Provision = memo(function Provision({
   provision,
   index,
-  actHref,
+  actTitle,
   muted = false,
 }: ProvisionProps) {
   const localize = useLocalize();
+  const [open, setOpen] = useState(false);
   const viewerHref = linkHref(provision.viewer_url);
   const officialHref = linkHref(provision.url);
-  /* The official act link lives once in the card footer; a provision only repeats
-     it when it is that provision's *only* way back to the source text. */
-  const fallbackHref = viewerHref == null && officialHref !== actHref ? officialHref : undefined;
   const repealed = provision.in_force === false;
+  /* With neither link there is no act text to show, so the row stays inert rather
+     than opening a modal that could only apologise. */
+  const expandable = viewerHref != null || officialHref != null;
+
+  const handleOpen = useCallback(() => setOpen(true), []);
 
   return (
     <li className="flex gap-3">
@@ -130,7 +143,7 @@ const Provision = memo(function Provision({
               {localize('com_aflat_sources_repealed')}
             </span>
           )}
-          {viewerHref == null && fallbackHref == null && actHref == null && (
+          {!expandable && (
             <span
               data-testid="aflat-source-unlinked"
               className="rounded border border-border-light px-1.5 py-px text-[10px] font-bold uppercase tracking-[0.06em] text-text-tertiary"
@@ -146,52 +159,27 @@ const Provision = memo(function Provision({
           </span>
         )}
 
-        {present(provision.snippet) && (
-          <span
-            className={cn(
-              'text-[12.5px] leading-relaxed text-text-secondary',
-              muted && 'line-clamp-2',
+        {expandable && (
+          <>
+            <button
+              type="button"
+              data-testid="aflat-provision-expand"
+              onClick={handleOpen}
+              className="mt-0.5 self-start text-[12.5px] font-semibold text-link underline underline-offset-[3px] hover:text-cta-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
+            >
+              {localize('com_aflat_sources_open_article')}
+            </button>
+            {/* Mounted only once opened: each one fetches the act blob, and ten cited
+                provisions must not mean ten idle fetchers sitting under an answer. */}
+            {open && (
+              <ArticleModal
+                provision={provision}
+                actTitle={actTitle}
+                open={open}
+                onOpenChange={setOpen}
+              />
             )}
-          >
-            {provision.snippet}
-          </span>
-        )}
-
-        {/* Provenance: the cheapest trust signal there is — why retrieval surfaced
-            this provision at all. Quiet, but never hidden. */}
-        {present(provision.why) && (
-          <span
-            data-testid="aflat-provision-why"
-            className="text-[11.5px] leading-snug text-text-tertiary"
-          >
-            {provision.why}
-          </span>
-        )}
-
-        {viewerHref != null && (
-          <a
-            data-testid="aflat-provision-link"
-            href={viewerHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-0.5 flex items-center gap-1.5 self-start text-[12.5px] font-semibold text-link underline underline-offset-[3px] hover:text-cta-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
-          >
-            {localize('com_aflat_sources_open_article')}
-            <ExternalLink aria-hidden="true" className="h-[13px] w-[13px] shrink-0" />
-          </a>
-        )}
-
-        {fallbackHref != null && (
-          <a
-            data-testid="aflat-provision-link"
-            href={fallbackHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-0.5 flex items-center gap-1.5 self-start text-[12.5px] font-semibold text-link underline underline-offset-[3px] hover:text-cta-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
-          >
-            {localize('com_aflat_sources_open_law')}
-            <ExternalLink aria-hidden="true" className="h-[13px] w-[13px] shrink-0" />
-          </a>
+          </>
         )}
       </div>
     </li>
@@ -202,7 +190,6 @@ const ActCard = memo(function ActCard({ act, numbering, muted = false }: ActCard
   const localize = useLocalize();
   const repealed = act.in_force === false;
   const amending = act.likely_amending === true;
-  const officialHref = linkHref(act.url);
 
   const provisions = useMemo(
     () => [...act.provisions].sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity)),
@@ -277,24 +264,11 @@ const ActCard = memo(function ActCard({ act, numbering, muted = false }: ActCard
             key={`provision-${provision.entity_id ?? provision.ref ?? i}`}
             provision={provision}
             index={numbering.get(provision) ?? i + 1}
-            actHref={officialHref}
+            actTitle={act.act_title}
             muted={muted}
           />
         ))}
       </ol>
-
-      {officialHref != null && (
-        <a
-          data-testid="aflat-act-link"
-          href={officialHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 self-start text-[11.5px] text-text-tertiary underline underline-offset-[3px] transition-colors hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
-        >
-          {localize('com_aflat_sources_open')}
-          <ExternalLink aria-hidden="true" className="h-3 w-3 shrink-0" />
-        </a>
-      )}
     </li>
   );
 });

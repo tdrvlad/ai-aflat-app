@@ -155,22 +155,26 @@ describe('Sources', () => {
     expect(items[1]).toHaveTextContent(/^2/);
   });
 
-  it('makes our article-level reader the primary link and the official act the quiet one', () => {
+  // CONTRACT CHANGED 2026-08-07. The box used to carry the links itself — our reader
+  // per provision, the official act once in the card footer. Both moved into
+  // `ArticleModal`: the box is now the citation (act + article) and nothing else, and
+  // the ways out live next to the article text they refer to. What is pinned here is
+  // that the way through still exists and is reachable by keyboard, not where the
+  // anchors happen to sit.
+  it('offers a way into each provision’s text instead of a link out of the box', () => {
     render(<Sources sources={flat([LABOUR_CODE])} sourcesByAct={[LABOUR_CODE]} />);
 
-    const provisionLinks = screen.getAllByTestId('aflat-provision-link');
-    expect(provisionLinks).toHaveLength(2);
-    expect(provisionLinks[0]).toHaveAttribute('href', PROVISION_A.viewer_url);
-    expect(provisionLinks[0]).toHaveAttribute('target', '_blank');
-    expect(provisionLinks[0]).toHaveAttribute('rel', 'noopener noreferrer');
-    expect(provisionLinks[0]).toHaveTextContent('Open the article');
+    const expanders = screen.getAllByTestId('aflat-provision-expand');
+    expect(expanders).toHaveLength(2);
+    expect(expanders[0]).toHaveTextContent('View the article');
+    expect(expanders[0].tagName).toBe('BUTTON');
 
-    const actLink = screen.getByTestId('aflat-act-link');
-    expect(actLink).toHaveAttribute('href', LABOUR_CODE.url);
-    expect(actLink).toHaveTextContent('View the act on legislatie.just.ro');
+    // The box itself no longer navigates anywhere.
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('aflat-act-link')).not.toBeInTheDocument();
   });
 
-  it('falls back to the official link as primary when there is no viewer url', () => {
+  it('still opens a provision that only has the official act link', () => {
     const act: TAflatSourceAct = {
       ...LABOUR_CODE,
       url: undefined,
@@ -178,10 +182,10 @@ describe('Sources', () => {
     };
     render(<Sources sources={act.provisions} sourcesByAct={[act]} />);
 
-    const link = screen.getByTestId('aflat-provision-link');
-    expect(link).toHaveAttribute('href', PROVISION_A.url);
-    expect(link).toHaveTextContent('Open the text of the law');
-    expect(screen.queryByTestId('aflat-act-link')).not.toBeInTheDocument();
+    // No reader link, but `url` alone is still a route to the source text, so the
+    // provision must not go inert — the modal is what decides what it can show.
+    expect(screen.getByTestId('aflat-provision-expand')).toBeInTheDocument();
+    expect(screen.queryByTestId('aflat-source-unlinked')).not.toBeInTheDocument();
   });
 
   it('renders no anchor at all when a provision has neither link', () => {
@@ -222,15 +226,22 @@ describe('Sources', () => {
 
     expect(screen.queryByTestId('aflat-provision-title')).not.toBeInTheDocument();
     expect(screen.queryByTestId('aflat-provision-path')).not.toBeInTheDocument();
-    expect(screen.getByText('Text al ordonanței de modificare.')).toBeInTheDocument();
+    // The card still identifies its act and still opens, which is what makes an
+    // unlabelled provision citable at all.
+    expect(cards()).toHaveLength(1);
+    expect(screen.getByTestId('aflat-provision-expand')).toBeInTheDocument();
   });
 
-  it('shows the provenance line retrieval returned', () => {
+  // The excerpt and the provenance line are not gone — they moved into the modal,
+  // where they sit beside the article text they describe. Keeping them in the box
+  // is what made ten citations unscannable.
+  it('keeps the excerpt and the provenance line out of the box', () => {
     render(<Sources sources={flat([LABOUR_CODE])} sourcesByAct={[LABOUR_CODE]} />);
 
-    const why = screen.getAllByTestId('aflat-provision-why');
-    expect(why).toHaveLength(2);
-    expect(why[0]).toHaveTextContent('matched: concedier, preaviz');
+    expect(screen.queryByTestId('aflat-provision-why')).not.toBeInTheDocument();
+    expect(screen.getByTestId('aflat-sources')).not.toHaveTextContent(
+      'matched: concedier, preaviz',
+    );
   });
 
   it('never renders the degraded-retrieval marker as an error', () => {
@@ -310,8 +321,8 @@ describe('Sources', () => {
       expect(screen.getByTestId('aflat-act-amending-note')).toHaveTextContent(
         'el schimbă o altă lege',
       );
-      expect(screen.getAllByTestId('aflat-provision-link')[0]).toHaveTextContent(
-        'Deschide articolul',
+      expect(screen.getAllByTestId('aflat-provision-expand')[0]).toHaveTextContent(
+        'Vezi articolul',
       );
       expect(screen.getByTestId('aflat-sources-secondary')).toHaveTextContent(
         'Alte surse consultate',

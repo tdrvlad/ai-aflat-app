@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { setAnonAuthSurface } from 'librechat-data-provider';
 import { SendIcon, TextareaAutosize } from '@librechat/client';
-import { BrandMark } from '~/components/Brand';
 import { startAuthAttempt } from './Auth/authTrace';
 import LoginModal from './Auth/LoginModal';
-import StarterChips from './StarterChips';
+import AskLanding from './AskLanding';
 import { saveStash } from './anonStash';
 import { cn, removeFocusRings } from '~/utils';
 import { useLocalize } from '~/hooks';
@@ -218,19 +217,7 @@ export default function AnonChat() {
       )}
     >
       {!hasThread && (
-        <div className="row-start-1 flex flex-col justify-end gap-6 text-center">
-          <div>
-            <BrandMark className="mx-auto mb-4 h-[88px]" />
-            <h1 className="m-0 text-balance text-3xl font-semibold">
-              {localize('com_aflat_ask_heading')}
-            </h1>
-            <p className="mx-auto mt-3 max-w-xl text-balance text-sm text-text-secondary">
-              {localize('com_aflat_ask_subheading')}
-            </p>
-          </div>
-          {/* A way in, offered before the empty field rather than after it. */}
-          {state === 'idle' && <StarterChips onPick={handlePick} />}
-        </div>
+        <AskLanding className="row-start-1" onPick={state === 'idle' ? handlePick : undefined} />
       )}
 
       {hasThread && (
@@ -246,8 +233,6 @@ export default function AnonChat() {
               <span className="sr-only">{localize('com_aflat_your_question')}: </span>
               {sentText}
             </div>
-            {/* The continuity promise, made in advance of the identity step. */}
-            <span className="text-xs text-text-tertiary">{localize('com_aflat_parked_note')}</span>
           </div>
           {state === 'asking' && (
             <div className="flex items-center gap-2 pl-1" data-testid="aflat-thinking">
