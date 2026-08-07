@@ -23,7 +23,6 @@ import Parameters from '~/components/SidePanel/Parameters/Panel';
 import { MemoryPanel } from '~/components/SidePanel/Memories';
 import FilesPanel from '~/components/SidePanel/Files/Panel';
 import { PromptsAccordion } from '~/components/Prompts';
-import { SkillsAccordion } from '~/components/Skills';
 
 export default function useSideNavLinks({
   hidePanel,
@@ -68,16 +67,6 @@ export default function useSideNavLinks({
 
   const Links = useMemo(() => {
     const links: NavLink[] = [];
-
-    if (hasAccessToSkills && skillsEnabled) {
-      links.push({
-        title: 'com_ui_skills',
-        label: '',
-        icon: ScrollText,
-        id: 'skills',
-        Component: SkillsAccordion,
-      });
-    }
 
     if (hasAccessToPrompts) {
       links.push({
@@ -147,8 +136,6 @@ export default function useSideNavLinks({
     endpoint,
     keyProvided,
     hasAccessToPrompts,
-    hasAccessToSkills,
-    skillsEnabled,
     hasAccessToMemories,
     hasAccessToReadMemories,
     interfaceConfig.parameters,

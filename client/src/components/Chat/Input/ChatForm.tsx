@@ -22,7 +22,6 @@ import {
   useAssistantsMapContext,
 } from '~/Providers';
 import usePostLoginHandoff from '~/components/Aflat/usePostLoginHandoff';
-import PendingManualSkillsChips from './PendingManualSkillsChips';
 import { cn, getModelSpec, removeFocusRings } from '~/utils';
 import { useGetStartupConfig } from '~/data-provider';
 import { mainTextareaId, BadgeItem } from '~/common';
@@ -31,7 +30,6 @@ import AttachFileChat from './Files/AttachFileChat';
 import FileFormChat from './Files/FileFormChat';
 import TextareaHeader from './TextareaHeader';
 import PromptsCommand from './PromptsCommand';
-import SkillsCommand from './SkillsCommand';
 import CollapseChat from './CollapseChat';
 import QuoteButton from './QuoteButton';
 import StreamAudio from './StreamAudio';
@@ -284,12 +282,6 @@ const ChatForm = memo(function ChatForm({
             textAreaRef={textAreaRef}
           />
           <PromptsCommand index={index} textAreaRef={textAreaRef} submitPrompt={submitPrompt} />
-          <SkillsCommand
-            index={index}
-            textAreaRef={textAreaRef}
-            conversationId={conversationId}
-            agentId={conversation?.agent_id}
-          />
           <div
             onClick={handleContainerClick}
             className={cn(
@@ -301,7 +293,6 @@ const ChatForm = memo(function ChatForm({
             )}
           >
             <TextareaHeader addedConvo={addedConvo} setAddedConvo={setAddedConvo} />
-            <PendingManualSkillsChips conversationId={conversationId} />
             {quotesEnabled && <PendingQuoteChips conversationId={conversationId} />}
             {/* WIP */}
             <EditBadges

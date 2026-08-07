@@ -25,11 +25,6 @@ const loadInlinePromptsView = () =>
     Component: m.default,
   }));
 
-const loadSkillsView = () =>
-  import('~/components/Skills/layouts/SkillsView').then((m) => ({
-    Component: m.default,
-  }));
-
 /** ai-aflat wallet. Lazy: most sessions never open it. */
 const loadWallet = () =>
   import('~/components/Aflat/Wallet').then((m) => ({
@@ -127,22 +122,6 @@ export const router = createBrowserRouter(
             {
               path: 'prompts/:promptId',
               lazy: loadInlinePromptsView,
-            },
-            {
-              path: 'skills',
-              lazy: loadSkillsView,
-            },
-            {
-              path: 'skills/new',
-              lazy: loadSkillsView,
-            },
-            {
-              path: 'skills/:skillId',
-              lazy: loadSkillsView,
-            },
-            {
-              path: 'skills/:skillId/edit',
-              lazy: loadSkillsView,
             },
           ],
         },
