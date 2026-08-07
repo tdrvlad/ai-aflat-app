@@ -36,30 +36,6 @@ export function updateFavorites(favorites: q.TUserFavorite[]): Promise<q.TUserFa
   return request.post(`${endpoints.apiBaseUrl()}/api/user/settings/favorites`, { favorites });
 }
 
-/**
- * Skill favorites (star-a-skill). The backend route is phase 2 — see the
- * original UI PR for the client surface. Until then, these resolve with
- * an empty list so the UI hooks compile and the Star button is a no-op.
- */
-export function getSkillFavorites(): Promise<string[]> {
-  return Promise.resolve([] as string[]);
-}
-
-export function updateSkillFavorites(skillFavorites: string[]): Promise<string[]> {
-  return Promise.resolve(skillFavorites);
-}
-
-/** Per-user skill active/inactive overrides. */
-export function getSkillStates(): Promise<sk.TSkillStatesResponse> {
-  return request.get(endpoints.skillStates());
-}
-
-export function updateSkillStates(
-  skillStates: sk.TSkillStatesResponse,
-): Promise<sk.TSkillStatesResponse> {
-  return request.post(endpoints.skillStates(), { skillStates });
-}
-
 export function getSharedMessages(shareId: string): Promise<t.TSharedMessagesResponse> {
   return request.get(endpoints.shareMessages(shareId));
 }

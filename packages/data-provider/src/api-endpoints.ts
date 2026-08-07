@@ -437,7 +437,6 @@ export const skillTree = ({ skillId, path = '' }: { skillId: string; path?: stri
 };
 
 /* Skill active states (per-user overrides) */
-export const skillStates = () => `${BASE_URL}/api/user/settings/skills/active`;
 
 /* Roles */
 export const roles = () => `${BASE_URL}/api/roles`;
