@@ -30,20 +30,10 @@ const loadSkillsView = () =>
     Component: m.default,
   }));
 
-const loadProjectsView = () =>
-  import('~/components/Projects').then((m) => ({
-    Component: m.ProjectsView,
-  }));
-
 /** ai-aflat wallet. Lazy: most sessions never open it. */
 const loadWallet = () =>
   import('~/components/Aflat/Wallet').then((m) => ({
     Component: m.Wallet,
-  }));
-
-const loadProjectWorkspace = () =>
-  import('~/components/Projects').then((m) => ({
-    Component: m.ProjectWorkspace,
   }));
 
 const baseEl = document.querySelector('base');
@@ -153,14 +143,6 @@ export const router = createBrowserRouter(
             {
               path: 'skills/:skillId/edit',
               lazy: loadSkillsView,
-            },
-            {
-              path: 'projects',
-              lazy: loadProjectsView,
-            },
-            {
-              path: 'projects/:projectId',
-              lazy: loadProjectWorkspace,
             },
           ],
         },

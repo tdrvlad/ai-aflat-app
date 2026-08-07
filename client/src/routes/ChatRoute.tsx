@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRecoilCallback, useRecoilValue } from 'recoil';
 import { Spinner, useToastContext } from '@librechat/client';
@@ -20,7 +20,6 @@ import {
   useGetConvoIdQuery,
   useGetStartupConfig,
   useGetEndpointsQuery,
-  useProjectQuery,
 } from '~/data-provider';
 import {
   useAssistantListMap,
@@ -36,9 +35,6 @@ import { NotificationSeverity } from '~/common';
 import AnonChat from '~/components/Aflat/AnonChat';
 import temporaryStore from '~/store/temporary';
 import store from '~/store';
-
-const isValidChatProjectId = (projectId: string | null): projectId is string =>
-  projectId != null && /^[a-f\d]{24}$/i.test(projectId);
 
 export default function ChatRoute() {
   const { data: startupConfig } = useGetStartupConfig();
@@ -56,65 +52,13 @@ export default function ChatRoute() {
   useAppStartup({ startupConfig, user });
 
   const index = 0;
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { conversationId = '' } = useParams();
-  const projectIdParam = searchParams.get('projectId');
-  const chatProjectId = isValidChatProjectId(projectIdParam) ? projectIdParam : null;
   useIdChangeEffect(conversationId);
   const { hasSetConversation, conversation } = store.useCreateConversationAtom(index);
   const { newConversation } = useNewConvo();
   const { showToast } = useToastContext();
   const localize = useLocalize();
-  const projectQuery = useProjectQuery(chatProjectId, {
-    enabled: isAuthenticated && Boolean(chatProjectId),
-    retry: false,
-    staleTime: 30000,
-    cacheTime: 300000,
-  });
-  /**
-   * The scoped project is *confirmed gone* — a not-found/not-owned (404) response,
-   * or a success that resolved to a different/empty project. Transient failures
-   * (500, network, auth refresh race) are deliberately excluded: this query runs with
-   * `retry: false`, so treating any error as "gone" would unscope a valid project on
-   * a single blip.
-   */
-  const projectNotFound = projectQuery.isError && isNotFoundError(projectQuery.error);
-  /**
-   * Trust the scope when the project resolves to itself, and keep showing it through
-   * transient errors via React Query's retained data — but never for a project that
-   * is confirmed gone (otherwise the deleted project's chip lingers).
-   */
-  const verifiedChatProjectId =
-    !projectNotFound && projectQuery.data?._id === chatProjectId ? chatProjectId : null;
-  const projectTemplate = useMemo(
-    () => (verifiedChatProjectId ? { chatProjectId: verifiedChatProjectId } : {}),
-    [verifiedChatProjectId],
-  );
-
-  /**
-   * The scoped project is gone even though the URL still carries `?projectId`. Drop
-   * the param so the new-chat landing reverts to an unscoped chat — otherwise the
-   * stale chip lingers and sends target a dead project.
-   */
-  const projectScopeMissing =
-    Boolean(chatProjectId) &&
-    conversationId === Constants.NEW_CONVO &&
-    (projectNotFound || (projectQuery.isSuccess && projectQuery.data?._id !== chatProjectId));
-
-  useEffect(() => {
-    if (!projectScopeMissing) {
-      return;
-    }
-    setSearchParams(
-      (params) => {
-        const next = new URLSearchParams(params);
-        next.delete('projectId');
-        return next;
-      },
-      { replace: true },
-    );
-  }, [projectScopeMissing, setSearchParams]);
-
   const modelsQuery = useGetModelsQuery({
     enabled: isAuthenticated,
     refetchOnMount: 'always',
@@ -146,11 +90,7 @@ export default function ChatRoute() {
     const rolesLoaded = roles?.USER != null;
     const isNewConvo = conversationId === Constants.NEW_CONVO;
     const isDraftNewConvo = conversation?.conversationId === Constants.NEW_CONVO;
-    const draftProjectMismatch = verifiedChatProjectId
-      ? conversation?.chatProjectId !== verifiedChatProjectId
-      : conversation?.chatProjectId != null;
-    const newConvoNeedsInit =
-      isNewConvo && (!conversation || (isDraftNewConvo && draftProjectMismatch));
+    const newConvoNeedsInit = isNewConvo && !conversation;
     const shouldSetConvo =
       (startupConfig &&
         rolesLoaded &&
@@ -162,10 +102,6 @@ export default function ChatRoute() {
       return;
     }
 
-    if (isNewConvo && chatProjectId && projectQuery.isLoading) {
-      return;
-    }
-
     const getNewConvoPreset = () => {
       const result = getDefaultModelSpec(startupConfig, endpointsQuery.data);
       const spec = result?.default ?? result?.last ?? result?.softDefault;
@@ -173,7 +109,7 @@ export default function ChatRoute() {
 
       const queryParams: Record<string, string> = {};
       searchParams.forEach((value, key) => {
-        if (key !== 'prompt' && key !== 'q' && key !== 'submit' && key !== 'projectId') {
+        if (key !== 'prompt' && key !== 'q' && key !== 'submit') {
           queryParams[key] = value;
         }
       });
@@ -192,7 +128,6 @@ export default function ChatRoute() {
       clearMessagesCache(queryClient, conversation?.conversationId);
       newConversation({
         modelsData: modelsQuery.data,
-        template: projectTemplate,
         ...(preset ? { preset } : {}),
       });
 
@@ -240,7 +175,6 @@ export default function ChatRoute() {
       clearMessagesCache(queryClient, conversation?.conversationId);
       newConversation({
         modelsData: modelsQuery.data,
-        template: projectTemplate,
         ...(preset ? { preset } : {}),
       });
       hasSetConversation.current = true;
@@ -266,12 +200,7 @@ export default function ChatRoute() {
     endpointsQuery.data,
     modelsQuery.data,
     assistantListMap,
-    chatProjectId,
-    projectQuery.data?._id,
-    projectQuery.isLoading,
-    projectTemplate,
     queryClient,
-    conversation?.chatProjectId,
     conversation?.conversationId,
   ]);
 
@@ -314,7 +243,7 @@ export default function ChatRoute() {
 
   return (
     <ToolCallsMapProvider conversationId={conversation.conversationId ?? ''}>
-      <ChatView index={index} project={verifiedChatProjectId ? projectQuery.data : undefined} />
+      <ChatView index={index} />
     </ToolCallsMapProvider>
   );
 }

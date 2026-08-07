@@ -9,8 +9,6 @@ import {
   Share2,
   CopyPlus,
   Archive,
-  FolderInput,
-  FolderX,
   Pen,
   Pin,
   Trash,
@@ -19,7 +17,6 @@ import type { TMessage } from 'librechat-data-provider';
 import type { MouseEvent } from 'react';
 import {
   useDuplicateConversationMutation,
-  useAssignConversationToProjectMutation,
   useDeleteConversationMutation,
   useGetStartupConfig,
   useArchiveConvoMutation,
@@ -28,14 +25,12 @@ import {
 import { useHasAccess, useLocalize, useNavigateToConvo, useNewConvo } from '~/hooks';
 import { NotificationSeverity } from '~/common';
 import { useChatContext } from '~/Providers';
-import ProjectButton from './ProjectButton';
 import DeleteButton from './DeleteButton';
 import ShareButton from './ShareButton';
 import { cn } from '~/utils';
 
 function ConvoOptions({
   conversationId,
-  chatProjectId,
   title,
   isPinned = false,
   retainView,
@@ -46,7 +41,6 @@ function ConvoOptions({
   isShiftHeld = false,
 }: {
   conversationId: string | null;
-  chatProjectId?: string | null;
   title: string | null;
   isPinned?: boolean;
   retainView: () => void;
@@ -70,10 +64,8 @@ function ConvoOptions({
   const menuId = useId();
   const shareButtonRef = useRef<HTMLButtonElement>(null);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
-  const projectButtonRef = useRef<HTMLButtonElement>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showProjectDialog, setShowProjectDialog] = useState(false);
   const [announcement, setAnnouncement] = useState('');
 
   const canCreateSharedLinks = useHasAccess({
@@ -82,7 +74,6 @@ function ConvoOptions({
   });
 
   const archiveConvoMutation = useArchiveConvoMutation();
-  const assignConversationToProject = useAssignConversationToProjectMutation();
   const pinConvoMutation = usePinConversationMutation();
 
   const deleteMutation = useDeleteConversationMutation({
@@ -142,37 +133,6 @@ function ConvoOptions({
   const deleteHandler = useCallback(() => {
     setShowDeleteDialog(true);
   }, []);
-
-  const projectHandler = useCallback(() => {
-    setShowProjectDialog(true);
-  }, []);
-
-  const removeProjectHandler = useCallback(() => {
-    const convoId = conversationId ?? '';
-    if (!convoId) {
-      return;
-    }
-    assignConversationToProject.mutate(
-      { conversationId: convoId, projectId: null },
-      {
-        onSuccess: () => {
-          setIsPopoverActive(false);
-          showToast({
-            message: localize('com_ui_project_updated'),
-            severity: NotificationSeverity.SUCCESS,
-            showIcon: true,
-          });
-        },
-        onError: () => {
-          showToast({
-            message: localize('com_ui_project_update_error'),
-            severity: NotificationSeverity.ERROR,
-            showIcon: true,
-          });
-        },
-      },
-    );
-  }, [assignConversationToProject, conversationId, localize, setIsPopoverActive, showToast]);
 
   const handleInstantDelete = useCallback(
     (e: MouseEvent) => {
@@ -301,27 +261,6 @@ function ConvoOptions({
         ),
       },
       {
-        label: localize('com_ui_change_project'),
-        onClick: projectHandler,
-        icon: <FolderInput className="icon-sm mr-2 text-text-primary" aria-hidden="true" />,
-        ariaHasPopup: 'dialog' as const,
-        ariaControls: 'project-conversation-dialog',
-        hideOnClick: false,
-        ref: projectButtonRef,
-        render: (props) => <button {...props} />,
-      },
-      {
-        label: localize('com_ui_remove_from_project'),
-        onClick: removeProjectHandler,
-        show: Boolean(chatProjectId),
-        hideOnClick: false,
-        icon: assignConversationToProject.isLoading ? (
-          <Spinner className="size-4" />
-        ) : (
-          <FolderX className="icon-sm mr-2 text-text-primary" aria-hidden="true" />
-        ),
-      },
-      {
         label: localize('com_ui_archive'),
         onClick: handleArchiveClick,
         hideOnClick: false,
@@ -357,10 +296,6 @@ function ConvoOptions({
       handleArchiveClick,
       canCreateSharedLinks,
       handleDuplicateClick,
-      projectHandler,
-      removeProjectHandler,
-      chatProjectId,
-      assignConversationToProject.isLoading,
     ],
   );
 
@@ -459,16 +394,6 @@ function ConvoOptions({
           setShowDeleteDialog={setShowDeleteDialog}
         />
       )}
-      {showProjectDialog && (
-        <ProjectButton
-          conversationId={conversationId ?? ''}
-          chatProjectId={chatProjectId}
-          setMenuOpen={setIsPopoverActive}
-          triggerRef={projectButtonRef}
-          showProjectDialog={showProjectDialog}
-          setShowProjectDialog={setShowProjectDialog}
-        />
-      )}
     </>
   );
 }
@@ -477,7 +402,6 @@ export default memo(ConvoOptions, (prevProps, nextProps) => {
   return (
     prevProps.conversationId === nextProps.conversationId &&
     prevProps.title === nextProps.title &&
-    prevProps.chatProjectId === nextProps.chatProjectId &&
     prevProps.isPinned === nextProps.isPinned &&
     prevProps.isPopoverActive === nextProps.isPopoverActive &&
     prevProps.isActiveConvo === nextProps.isActiveConvo &&

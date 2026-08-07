@@ -17,7 +17,6 @@ import { ChatContext, AddedChatContext, ChatFormProvider, useFileMapContext } fr
 import { getChatFormPlaceholder } from './getChatFormPlaceholder';
 import ConversationStarters from './Input/ConversationStarters';
 import { useGetMessagesByConvoId } from '~/data-provider';
-import ProjectLandingChip from './ProjectLandingChip';
 import MessagesView from './Messages/MessagesView';
 import Presentation from './Presentation';
 import ChatForm from './Input/ChatForm';
@@ -37,7 +36,7 @@ function LoadingSpinner() {
   );
 }
 
-function ChatView({ index = 0, project }: { index?: number; project?: TChatProject }) {
+function ChatView({ index = 0 }: { index?: number }) {
   const { conversationId } = useParams();
   const localize = useLocalize();
   const rootSubmission = useRecoilValue(store.submissionByIndex(index));
@@ -79,7 +78,6 @@ function ChatView({ index = 0, project }: { index?: number; project?: TChatProje
     (!messagesTree || messagesTree.length === 0) &&
     (conversationId === Constants.NEW_CONVO || !conversationId);
   const isNavigating = (!messagesTree || messagesTree.length === 0) && conversationId != null;
-  const isProjectLandingPage = isLandingPage && project != null;
 
   if (isLoading && conversationId !== Constants.NEW_CONVO) {
     content = <LoadingSpinner />;
@@ -91,11 +89,7 @@ function ChatView({ index = 0, project }: { index?: number; project?: TChatProje
     content = <Landing centerFormOnLanding={centerFormOnLanding} />;
   }
 
-  const chatFormPlaceholder = getChatFormPlaceholder({
-    isProjectLandingPage,
-    projectName: project?.name,
-    localize,
-  });
+  const chatFormPlaceholder = getChatFormPlaceholder({ localize });
 
   return (
     <ChatFormProvider {...methods}>
@@ -120,7 +114,6 @@ function ChatView({ index = 0, project }: { index?: number; project?: TChatProje
                       isLandingPage && 'max-w-3xl transition-all duration-200 xl:max-w-4xl',
                     )}
                   >
-                    {isProjectLandingPage && project && <ProjectLandingChip project={project} />}
                     {isLandingPage && <ConversationStarters />}
                     <ChatForm index={index} placeholder={chatFormPlaceholder} />
                     {!isLandingPage && <Footer />}

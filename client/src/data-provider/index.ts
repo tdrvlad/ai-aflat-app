@@ -7,7 +7,6 @@ export * from './Files';
 export * from './Memories';
 export * from './Messages';
 export * from './Misc';
-export * from './Projects';
 export * from './Tools';
 export * from './connection';
 export * from './Favorites';
