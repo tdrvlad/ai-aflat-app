@@ -296,4 +296,5 @@ const graphTokenController = async (req, res) => {
 module.exports = {
   refreshController,
   graphTokenController,
+  sanitizeUserForAuthResponse,
 };

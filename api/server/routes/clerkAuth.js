@@ -10,6 +10,7 @@ const {
   ClerkVerificationError,
 } = require('@librechat/api');
 const { getAppConfig } = require('~/server/services/Config');
+const { sanitizeUserForAuthResponse } = require('~/server/controllers/AuthController');
 const { setAuthTokens } = require('~/server/services/AuthService');
 const { findUser, createUser } = require('~/models');
 const { checkBan } = require('~/server/middleware');
@@ -133,27 +134,27 @@ router.post('/clerk', async (req, res) => {
       return;
     }
 
-    /* Sets the refresh cookie; the client's existing silent refresh takes over. */
-    await setAuthTokens(user._id, res, null, req);
-
     /**
-     * TEMPORARY (2026-08-06) — the exchange returns 200 in production and the
-     * very next request still arrives without a refreshToken cookie. Names and
-     * attributes only; the token value is never logged.
+     * The session, handed back in the response — not left to be discovered.
+     *
+     * `setAuthTokens` also sets the refresh cookie, and that cookie still does
+     * its job: it is what keeps the user signed in tomorrow. But the *first*
+     * session must not depend on it. It used to: the client answered a
+     * successful exchange with a second round trip to `/api/auth/refresh` to
+     * redeem the cookie it had just been given, and when the browser declined
+     * to send that cookie back the user was returned to an anonymous app with
+     * a Clerk session in hand and no way to spend it. That is the loop we spent
+     * 2026-08-06/07 chasing, and its root was a cookie policy, but its shape
+     * was this indirection — a sign-in that succeeded on the server and had no
+     * way of saying so.
+     *
+     * `setAuthTokens` already returns the access token, so the exchange returns
+     * it with the user. One round trip, and the cookie becomes what it should
+     * have been all along: how the session is *renewed*, not how it starts.
      */
-    const emitted = res.getHeader('set-cookie');
-    const describe = (c) => {
-      const [pair, ...attrs] = String(c).split(';');
-      const name = pair.split('=')[0];
-      return `${name}(len=${pair.length}) [${attrs.map((a) => a.trim()).join(' ')}]`;
-    };
-    logger.info(
-      `[auth/clerk] emitted set-cookie: ${
-        emitted ? (Array.isArray(emitted) ? emitted : [emitted]).map(describe).join(' || ') : 'NONE'
-      }`,
-    );
+    const token = await setAuthTokens(user._id, res, null, req);
 
-    return res.json({ ok: true });
+    return res.json({ token, user: sanitizeUserForAuthResponse(user) });
   } catch (error) {
     logger.error('[auth/clerk] Exchange failed', error);
     return res.status(500).json({ error: 'exchange_failed' });

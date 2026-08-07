@@ -97,7 +97,8 @@ describe('POST /api/aflat/auth/clerk — success path', () => {
     const res = await signIn();
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true });
+    expect(res.body.token).toEqual(expect.any(String));
+    expect(res.body.user).toMatchObject({ email: 'ana@example.ro' });
 
     const users = await User.find({}).lean();
     expect(users).toHaveLength(1);
@@ -109,6 +110,25 @@ describe('POST /api/aflat/auth/clerk — success path', () => {
       emailVerified: true,
       name: 'Ana Pop',
     });
+  });
+
+  /**
+   * The client must not have to go back for the session. It used to — a second
+   * call to /api/auth/refresh to redeem the cookie just issued — and a browser
+   * that declined to return that cookie left a successful sign-in with no
+   * session in the page (production, 2026-08-07).
+   */
+  it('returns the session itself, without the credential fields', async () => {
+    mockClaims = { sub: CLERK_SUB, email: 'ana@example.ro', emailVerified: true };
+
+    const res = await signIn();
+
+    expect(res.status).toBe(200);
+    expect(res.body.token).toEqual(expect.any(String));
+    expect(res.body.user._id).toEqual(expect.any(String));
+    expect(res.body.user).not.toHaveProperty('password');
+    expect(res.body.user).not.toHaveProperty('totpSecret');
+    expect(res.body.user).not.toHaveProperty('backupCodes');
   });
 
   it('sets the refresh cookie so the existing silent refresh can take over', async () => {
@@ -132,7 +152,7 @@ describe('POST /api/aflat/auth/clerk — success path', () => {
 
     const second = await signIn();
     expect(second.status).toBe(200);
-    expect(second.body).toEqual({ ok: true });
+    expect(second.body.token).toEqual(expect.any(String));
 
     const users = await User.find({}).lean();
     expect(users).toHaveLength(1);

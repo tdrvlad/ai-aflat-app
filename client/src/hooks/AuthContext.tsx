@@ -175,8 +175,26 @@ const AuthContextProvider = ({
    * A reload would remount the conversation and make the user watch the app boot.
    */
   const establishSession = useCallback(
-    () =>
+    (session?: t.TRefreshTokenResponse) =>
       new Promise<boolean>((resolve) => {
+        /**
+         * A caller that was handed the session takes it. The Clerk exchange
+         * returns the token and the user in its own response, so there is
+         * nothing to go back for — and going back for it is what broke: it
+         * required the browser to return a cookie it had been given moments
+         * earlier, and when it declined, a sign-in that had fully succeeded on
+         * the server left the app anonymous (2026-08-07).
+         */
+        if (session?.token) {
+          setUserContext({
+            user: session.user,
+            token: session.token,
+            isAuthenticated: true,
+          });
+          resolve(true);
+          return;
+        }
+
         refreshToken.mutate(undefined, {
           onSuccess: (data: t.TRefreshTokenResponse | undefined) => {
             const { user, token = '' } = data ?? {};

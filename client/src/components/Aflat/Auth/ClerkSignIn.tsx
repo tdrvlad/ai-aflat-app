@@ -4,6 +4,7 @@ import { roRO } from '@clerk/localizations';
 import { ClerkProvider, SignIn, useAuth, useClerk } from '@clerk/clerk-react';
 import { apiBaseUrl, request } from 'librechat-data-provider';
 import { Spinner } from '@librechat/client';
+import type { TRefreshTokenResponse } from 'librechat-data-provider';
 import { useAuthContext, useLocalize } from '~/hooks';
 import type { TranslationKeys } from '~/hooks';
 
@@ -123,18 +124,20 @@ function ClerkHandoff({
         if (!token) {
           throw new Error('no_token');
         }
-        await request.post(exchangeUrl(), { token });
+        const session = (await request.post(exchangeUrl(), {
+          token,
+        })) as TRefreshTokenResponse;
         if (cancelled) {
           return;
         }
         /**
-         * The exchange succeeded but the cookie could not be redeemed — a
-         * session that exists on the server and not in the page. Reported as a
-         * failure rather than silently left half-signed-in, because the user
-         * would otherwise sit in front of a closed modal and an unanswered
-         * question.
+         * The exchange hands back the session it just created, so this adopts
+         * it directly. It used to call `establishSession()` empty, which went
+         * back to the server to redeem the refresh cookie — and a browser that
+         * declined to return that cookie left a fully successful sign-in with
+         * no session in the page at all.
          */
-        if (!(await establishSession())) {
+        if (!(await establishSession(session))) {
           throw new Error('session_not_established');
         }
         if (cancelled) {
@@ -296,7 +299,7 @@ function FreshWidget() {
        * to the chat route, where the parked question is picked up from
        * localStorage exactly as it is after the popup flow.
        */
-      signInFallbackRedirectUrl="/c/new"
+      fallbackRedirectUrl="/c/new"
       signUpFallbackRedirectUrl="/c/new"
       appearance={{
         elements: {

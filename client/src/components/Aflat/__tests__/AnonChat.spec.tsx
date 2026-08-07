@@ -84,7 +84,9 @@ describe('AnonChat (the signed-out chat screen)', () => {
     await waitFor(() => expect(screen.getByTestId('aflat-login-modal')).toBeVisible(), {
       timeout: 3000,
     });
-    expect(screen.getByText(/Create a free account to get the answer/i)).toBeVisible();
+    /* The gate's title. The body paragraph under it was removed — it repeated
+       both the title and the parked-question note above the modal. */
+    expect(screen.getByText(/Create an account to get the answer/i)).toBeVisible();
   });
 
   /**

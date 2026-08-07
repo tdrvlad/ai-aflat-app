@@ -496,11 +496,13 @@ export type TAuthContext = {
   setError: React.Dispatch<React.SetStateAction<string | undefined>>;
   roles?: Record<string, t.TRole | null | undefined>;
   /**
-   * ai-aflat: adopt a session established out-of-band — a refresh cookie set by
-   * the Clerk token exchange — without navigating or reloading. Resolves to
-   * whether a session was found. See `AuthContextProvider`.
+   * ai-aflat: adopt a session established out-of-band — by the Clerk token
+   * exchange — without navigating or reloading. Resolves to whether a session
+   * was established. Pass the session when the caller was handed one (the
+   * exchange returns it); omit it to redeem the refresh cookie instead.
+   * See `AuthContextProvider`.
    */
-  establishSession: () => Promise<boolean>;
+  establishSession: (session?: t.TRefreshTokenResponse) => Promise<boolean>;
 };
 
 export type TUserContext = {
