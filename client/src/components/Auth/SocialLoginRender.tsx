@@ -15,13 +15,26 @@ import { TStartupConfig } from 'librechat-data-provider';
  *
  * OpenID *is* Clerk: this is the redirect fallback the embedded flow degrades to
  * when `clerkPublishableKey` is unset (design 2026-08-04 §4).
+ *
+ * Gated on `openidLoginEnabled` ALONE. It used to also require
+ * `socialLoginEnabled` (`ALLOW_SOCIAL_LOGIN`), which made sense when that flag
+ * meant "offer third-party providers alongside our own email form" — there is no
+ * email form any more, and no other provider, so the flag's only remaining
+ * effect was to hide the last door on `/login` and render the page with no way
+ * to sign in at all. `.env.example` ships `ALLOW_SOCIAL_LOGIN=false`, and
+ * `isEnabled(undefined)` is also false, so the failure was the default rather
+ * than an unlucky setting. `/login` is reachable: `Root` sends users there when
+ * they decline the terms modal.
+ *
+ * This is the second silent gate on the same button — `OPENID_SESSION_SECRET`
+ * being unset is the first (see TOC.md). Both fail closed and neither logs.
  */
 function SocialLoginRender({
   startupConfig,
 }: {
   startupConfig: TStartupConfig | null | undefined;
 }) {
-  if (!startupConfig?.socialLoginEnabled || !startupConfig.openidLoginEnabled) {
+  if (startupConfig?.openidLoginEnabled !== true) {
     return null;
   }
 
