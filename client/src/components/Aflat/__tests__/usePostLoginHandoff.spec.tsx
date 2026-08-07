@@ -503,9 +503,62 @@ describe('usePostLoginHandoff', () => {
     expect(mockSubmitMessage).toHaveBeenCalledTimes(1);
   });
 
-  /** A stale or already-claimed stash is dead weight — drop it, silently. */
-  it('clears the stash and submits nothing on 404', async () => {
+  /**
+   * The production bug of 2026-08-07, pinned.
+   *
+   * The marker cookie lives 24h; the build that set it parked questions
+   * server-side, and the build that replaced it parks nothing but the local
+   * stash. So a browser that visited yesterday carries a credential for a
+   * question that no longer exists — and the question typed *today* gets routed
+   * into a claim that can only ever 404. The hook cleared the stash before
+   * claiming and then returned on the 404, which destroyed the only copy: sign
+   * in, and the question you just typed is gone.
+   *
+   * A 404 means "nothing parked server-side", never "no question".
+   */
+  it('asks the browser-held question when a leftover marker routes it into a 404 claim', async () => {
+    stashQuestion('Câte zile de concediu am pe an?');
+    setClaimMarker();
+    mockedRequest.post.mockRejectedValue(axiosError(404));
+
+    renderHandoff();
+
+    await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(1));
+    expect(mockSubmitMessage).toHaveBeenCalledWith({ text: 'Câte zile de concediu am pe an?' });
+  });
+
+  /** Delivered means consumed — it must not be offered again on the next mount. */
+  it('clears the stash once the 404 fallback has asked the question', async () => {
     stashQuestion();
+    setClaimMarker();
+    mockedRequest.post.mockRejectedValue(axiosError(404));
+
+    renderHandoff();
+
+    await waitFor(() => expect(mockSubmitMessage).toHaveBeenCalledTimes(1));
+    expect(readStash()).toBeNull();
+  });
+
+  /**
+   * The freshness rule still decides. A question older than the sitting this
+   * flow describes has no owner recorded anywhere and no age to vouch for it,
+   * so on a shared browser it belongs to nobody — drop it rather than open a
+   * stranger's first conversation with it.
+   */
+  it('clears the stash and submits nothing on 404 when the question is too old to own', async () => {
+    saveStash({ id: 'q-1', text: 'Ieri', ts: Date.now() - HANDOFF_MAX_AGE_MS - 1000 });
+    mockedRequest.post.mockRejectedValue(axiosError(404));
+
+    renderHandoff();
+
+    await waitFor(() => expect(readStash()).toBeNull());
+    await settle();
+    expect(mockSubmitMessage).not.toHaveBeenCalled();
+  });
+
+  /** A question already claimed by an earlier context is not re-askable here. */
+  it('submits nothing on 404 when the stash is flagged claimed for another account', async () => {
+    saveStash({ id: 'q-1', text: 'Al altcuiva', claimed: true, uid: 'someone-else' });
     mockedRequest.post.mockRejectedValue(axiosError(404));
 
     renderHandoff();

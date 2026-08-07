@@ -297,14 +297,15 @@ export default function usePostLoginHandoff() {
      * next person to sign in would be handed it. `HANDOFF_MAX_AGE_MS` bounds
      * that to the single sitting the flow actually describes.
      */
-    const browserHeld: PendingQuestion | null =
-      !markerPresent &&
+    const freshlyTyped: PendingQuestion | null =
       stash?.claimed !== true &&
       stashed != null &&
       typeof stashed.ts === 'number' &&
       Date.now() - stashed.ts <= HANDOFF_MAX_AGE_MS
         ? stashed
         : null;
+
+    const browserHeld: PendingQuestion | null = markerPresent ? null : freshlyTyped;
 
     const pending: PendingQuestion | null =
       state.undelivered != null && ownedByUser(state.undelivered.uid)
@@ -416,11 +417,30 @@ export default function usePostLoginHandoff() {
       } catch (error) {
         if (statusOf(error) === 404) {
           /**
-           * No claim cookie, or a question already claimed — indistinguishable
-           * by design, and both mean the same thing here: this browser has
-           * nothing parked, so there is nothing to hand off and nothing to
-           * retry.
+           * Nothing is parked server-side: no claim cookie, or a question some
+           * earlier page context already claimed. Indistinguishable by design,
+           * and neither is worth retrying.
+           *
+           * It does NOT mean there is no question. The marker that sent us down
+           * this path lives 24h, while the build that set it has been replaced
+           * by one that parks nothing server-side at all — so a browser that
+           * visited yesterday carries a credential for a question that no longer
+           * exists, and any question typed today is diverted into a claim that
+           * can only 404. Returning here threw away a perfectly good question
+           * that was sitting in `localStorage`, having already cleared it above:
+           * measured in production 2026-08-07, this is why signing in lost the
+           * question the visitor had just typed.
+           *
+           * So the local copy is asked instead, under the same freshness rule
+           * that governs it when no marker is present — the only ownership
+           * evidence a never-parked question has.
            */
+          if (freshlyTyped != null) {
+            const question: PendingQuestion = { ...freshlyTyped, uid };
+            if (!deliverable() || submitRef.current({ text: freshlyTyped.text }) === false) {
+              hold(question);
+            }
+          }
           return;
         }
         /**
